@@ -166,5 +166,5 @@ ON CONFLICT (id) DO UPDATE SET updated_at = NOW();
 
 -- Initial default Admin User (Username: admin / Password: admin1234)
 INSERT INTO public.admin_users (username, password_hash, display_name)
-VALUES ('admin', '0192023a7bbd73250516f069df18b500e94b47e0ac296d75b1576f6e70f4ab47', 'Administrator')
+VALUES ('admin', 'ac9689e2272427085e35b9d3e3e8bed88cb3434828b43b86fc0596cad4c6e270', 'Administrator')
 ON CONFLICT (username) DO NOTHING;

@@ -239,9 +239,9 @@ app.prepare().then(async () => {
         return handle(req, res);
     });
 
-    server.listen(PORT, async () => {
+    server.listen(PORT, '0.0.0.0', async () => {
         console.log('=======================================================');
-        console.log(`🚀 Next.js + Bot Guardian running at http://localhost:${PORT}`);
+        console.log(`🚀 Next.js + Bot Guardian running on port ${PORT}`);
         console.log('=======================================================');
         await bot.init();
     });

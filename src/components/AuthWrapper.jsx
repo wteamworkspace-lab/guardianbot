@@ -3,6 +3,7 @@
 import React, { useState, useEffect } from 'react';
 import { usePathname, useRouter } from 'next/navigation';
 import { ShieldCheck, Loader2 } from 'lucide-react';
+import Navbar from './Navbar';
 
 export default function AuthWrapper({ children }) {
   const pathname = usePathname();
@@ -57,7 +58,7 @@ export default function AuthWrapper({ children }) {
       });
   }, [pathname, router]);
 
-  // If on /login, render without protection
+  // If on /login, render without Navbar, without main py-8, and without footer
   if (pathname === '/login') {
     return <>{children}</>;
   }
@@ -82,5 +83,16 @@ export default function AuthWrapper({ children }) {
     return null;
   }
 
-  return <>{children}</>;
+  // Authenticated pages layout
+  return (
+    <>
+      <Navbar />
+      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 flex-1 w-full space-y-6">
+        {children}
+      </main>
+      <footer className="border-t border-slate-200 bg-white py-4 text-center text-xs text-slate-400">
+        <p>Guardian Bot &bull; High-Performance LINE Group Protection System (Next.js + Tailwind CSS)</p>
+      </footer>
+    </>
+  );
 }

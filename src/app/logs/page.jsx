@@ -52,72 +52,128 @@ export default function LogsPage() {
       </div>
 
       <div className="light-card rounded-2xl p-4 sm:p-6 space-y-4 shadow-sm">
-        <div className="overflow-x-auto">
-          <table className="w-full text-left text-xs text-slate-600">
-            <thead className="bg-slate-50 text-slate-500 uppercase text-[10px] tracking-wider border-b border-slate-200">
-              <tr>
-                <th className="p-3.5 font-semibold">วัน-เวลา</th>
-                <th className="p-3.5 font-semibold">กลุ่ม</th>
-                <th className="p-3.5 font-semibold">ประเภทเหตุการณ์</th>
-                <th className="p-3.5 font-semibold">ผู้กระทำผิด</th>
-                <th className="p-3.5 font-semibold">สาเหตุ / รายละเอียด</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-slate-100">
-              {isLoading ? (
-                <tr>
-                  <td colSpan="5" className="p-10 text-center text-slate-400">
-                    <Loader2 className="w-6 h-6 animate-spin text-line mx-auto mb-2" />
-                    กำลังโหลดประวัติ...
-                  </td>
-                </tr>
-              ) : logs.length === 0 ? (
-                <tr>
-                  <td colSpan="5" className="p-10 text-center text-slate-400">
-                    ยังไม่มีประวัติการกระทำผิด (ระบบกำลังเฝ้าระวัง 24 ชม.)
-                  </td>
-                </tr>
-              ) : (
-                logs.map((l) => {
-                  let badgeClass = 'bg-slate-100 text-slate-700 border-slate-200';
-                  let badgeText = l.action_type;
-                  if (l.action_type === 'anti_link') {
-                    badgeClass = 'bg-red-50 text-red-700 border-red-200';
-                    badgeText = '🔗 Anti-Link';
-                  } else if (l.action_type === 'anti_invite') {
-                    badgeClass = 'bg-amber-50 text-amber-700 border-amber-200';
-                    badgeText = '👥 Anti-Invite';
-                  } else if (l.action_type === 'anti_kick') {
-                    badgeClass = 'bg-purple-50 text-purple-700 border-purple-200';
-                    badgeText = '⚡ Anti-Kick';
-                  }
+        {isLoading ? (
+          <div className="p-10 text-center text-slate-400">
+            <Loader2 className="w-6 h-6 animate-spin text-line mx-auto mb-2" />
+            กำลังโหลดประวัติ...
+          </div>
+        ) : logs.length === 0 ? (
+          <div className="p-10 text-center text-slate-400">
+            ยังไม่มีประวัติการกระทำผิด (ระบบกำลังเฝ้าระวัง 24 ชม.)
+          </div>
+        ) : (
+          <>
+            {/* Mobile Card Feed (Visible on Mobile only) */}
+            <div className="block md:hidden space-y-3">
+              {logs.map((l) => {
+                let badgeClass = 'bg-slate-100 text-slate-700 border-slate-200';
+                let badgeText = l.action_type;
+                if (l.action_type === 'anti_link') {
+                  badgeClass = 'bg-red-50 text-red-700 border-red-200';
+                  badgeText = '🔗 Anti-Link (เตะคนส่งลิงก์)';
+                } else if (l.action_type === 'anti_invite') {
+                  badgeClass = 'bg-amber-50 text-amber-700 border-amber-200';
+                  badgeText = '👥 Anti-Invite (เตะคนชวนมั่ว)';
+                } else if (l.action_type === 'anti_kick') {
+                  badgeClass = 'bg-purple-50 text-purple-700 border-purple-200';
+                  badgeText = '⚡ Anti-Kick (เตะคนเตะมั่ว)';
+                }
 
-                  const timeStr = new Date(l.created_at).toLocaleString('th-TH');
+                const timeStr = new Date(l.created_at).toLocaleString('th-TH');
 
-                  return (
-                    <tr key={l.id || Math.random()} className="hover:bg-slate-50/80 transition">
-                      <td className="p-3.5 font-mono text-[11px] text-slate-500 whitespace-nowrap">{timeStr}</td>
-                      <td className="p-3.5 font-semibold text-slate-900">{l.group_name || 'Group'}</td>
-                      <td className="p-3.5">
-                        <span className={`px-2.5 py-0.5 rounded-md text-[10px] font-bold border ${badgeClass}`}>
-                          {badgeText}
-                        </span>
-                      </td>
-                      <td className="p-3.5 font-mono text-[11px] text-slate-700">
-                        <div className="font-semibold text-slate-900">{l.user_name || 'Unknown'}</div>
-                        <div className="text-[9px] text-slate-400">{l.user_mid || ''}</div>
-                      </td>
-                      <td className="p-3.5 text-slate-600">
-                        <div className="font-medium text-slate-800">{l.reason || '-'}</div>
-                        <div className="text-[10px] text-slate-400 mt-0.5">{l.details || ''}</div>
-                      </td>
-                    </tr>
-                  );
-                })
-              )}
-            </tbody>
-          </table>
-        </div>
+                return (
+                  <div key={l.id || Math.random()} className="bg-slate-50 border border-slate-200/80 rounded-xl p-3.5 space-y-2.5 shadow-sm">
+                    {/* Header: Action Badge & Time */}
+                    <div className="flex items-center justify-between gap-2">
+                      <span className={`px-2.5 py-1 rounded-lg text-[11px] font-bold border ${badgeClass}`}>
+                        {badgeText}
+                      </span>
+                      <span className="text-[11px] font-mono text-slate-400 shrink-0">
+                        {timeStr}
+                      </span>
+                    </div>
+
+                    {/* Group & User Info */}
+                    <div className="space-y-1 text-xs">
+                      <div className="flex items-center space-x-1.5">
+                        <span className="text-slate-400 font-medium shrink-0">กลุ่ม:</span>
+                        <span className="font-bold text-slate-900 truncate">{l.group_name || 'Group'}</span>
+                      </div>
+                      <div className="flex items-center space-x-1.5">
+                        <span className="text-slate-400 font-medium shrink-0">ผู้กระทำผิด:</span>
+                        <span className="font-semibold text-slate-800 truncate">{l.user_name || 'Unknown'}</span>
+                        {l.user_mid && (
+                          <span className="text-[10px] font-mono text-slate-400 truncate">({l.user_mid})</span>
+                        )}
+                      </div>
+                    </div>
+
+                    {/* Reason / Details */}
+                    {(l.reason || l.details) && (
+                      <div className="bg-white border border-slate-200 rounded-lg p-2 text-xs space-y-0.5 break-all">
+                        {l.reason && <p className="font-medium text-slate-800">{l.reason}</p>}
+                        {l.details && <p className="text-[11px] text-slate-500">{l.details}</p>}
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+
+            {/* Desktop Table (Visible on Desktop only) */}
+            <div className="hidden md:block overflow-x-auto">
+              <table className="w-full text-left text-xs text-slate-600">
+                <thead className="bg-slate-50 text-slate-500 uppercase text-[10px] tracking-wider border-b border-slate-200">
+                  <tr>
+                    <th className="p-3.5 font-semibold">วัน-เวลา</th>
+                    <th className="p-3.5 font-semibold">กลุ่ม</th>
+                    <th className="p-3.5 font-semibold">ประเภทเหตุการณ์</th>
+                    <th className="p-3.5 font-semibold">ผู้กระทำผิด</th>
+                    <th className="p-3.5 font-semibold">สาเหตุ / รายละเอียด</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100">
+                  {logs.map((l) => {
+                    let badgeClass = 'bg-slate-100 text-slate-700 border-slate-200';
+                    let badgeText = l.action_type;
+                    if (l.action_type === 'anti_link') {
+                      badgeClass = 'bg-red-50 text-red-700 border-red-200';
+                      badgeText = '🔗 Anti-Link';
+                    } else if (l.action_type === 'anti_invite') {
+                      badgeClass = 'bg-amber-50 text-amber-700 border-amber-200';
+                      badgeText = '👥 Anti-Invite';
+                    } else if (l.action_type === 'anti_kick') {
+                      badgeClass = 'bg-purple-50 text-purple-700 border-purple-200';
+                      badgeText = '⚡ Anti-Kick';
+                    }
+
+                    const timeStr = new Date(l.created_at).toLocaleString('th-TH');
+
+                    return (
+                      <tr key={l.id || Math.random()} className="hover:bg-slate-50/80 transition">
+                        <td className="p-3.5 font-mono text-[11px] text-slate-500 whitespace-nowrap">{timeStr}</td>
+                        <td className="p-3.5 font-semibold text-slate-900">{l.group_name || 'Group'}</td>
+                        <td className="p-3.5">
+                          <span className={`px-2.5 py-0.5 rounded-md text-[10px] font-bold border whitespace-nowrap ${badgeClass}`}>
+                            {badgeText}
+                          </span>
+                        </td>
+                        <td className="p-3.5 font-mono text-[11px] text-slate-700">
+                          <div className="font-semibold text-slate-900">{l.user_name || 'Unknown'}</div>
+                          <div className="text-[9px] text-slate-400">{l.user_mid || ''}</div>
+                        </td>
+                        <td className="p-3.5 text-slate-600">
+                          <div className="font-medium text-slate-800">{l.reason || '-'}</div>
+                          <div className="text-[10px] text-slate-400 mt-0.5">{l.details || ''}</div>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          </>
+        )}
       </div>
 
     </div>

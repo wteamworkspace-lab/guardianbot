@@ -365,72 +365,110 @@ export default function WhitelistPage() {
               </div>
             </div>
 
-            {/* Right Column: Whitelist Table */}
-            <div className="light-card rounded-2xl p-6 md:col-span-2 space-y-4 shadow-sm">
+            {/* Right Column: Whitelist Table / Mobile Cards */}
+            <div className="light-card rounded-2xl p-4 sm:p-6 md:col-span-2 space-y-4 shadow-sm">
               <div className="flex items-center justify-between">
                 <h3 className="text-base font-bold text-slate-900 flex items-center space-x-2">
-                  <Shield className="w-4 h-4 text-emerald-600" />
+                  <Shield className="w-4 h-4 text-emerald-600 shrink-0" />
                   <span>รายชื่อผู้ได้รับสิทธิ์ยกเว้น (Admin Whitelist)</span>
                 </h3>
-                <span className="text-xs px-2.5 py-1 rounded-full bg-slate-100 text-slate-700 border border-slate-200 font-semibold">
+                <span className="text-xs px-2.5 py-1 rounded-full bg-slate-100 text-slate-700 border border-slate-200 font-semibold shrink-0">
                   {whitelist.length} คน
                 </span>
               </div>
 
-              <div className="overflow-x-auto">
-                <table className="w-full text-left text-xs text-slate-600">
-                  <thead className="bg-slate-50 text-slate-500 uppercase text-[10px] tracking-wider border-b border-slate-200">
-                    <tr>
-                      <th className="p-3 font-semibold">ชื่อ / ข้อมูล</th>
-                      <th className="p-3 font-semibold">LINE MID</th>
-                      <th className="p-3 font-semibold">สิทธิ์</th>
-                      <th className="p-3 text-right font-semibold">จัดการ</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-slate-100">
-                    {isLoadingWhitelist ? (
-                      <tr>
-                        <td colSpan="4" className="p-8 text-center text-slate-400">
-                          <Loader2 className="w-6 h-6 animate-spin text-line mx-auto mb-2" />
-                          กำลังโหลดรายชื่อ Whitelist...
-                        </td>
-                      </tr>
-                    ) : whitelist.length === 0 ? (
-                      <tr>
-                        <td colSpan="4" className="p-6 text-center text-slate-400">ยังไม่มีรายชื่อผู้ดูแลใน Whitelist</td>
-                      </tr>
-                    ) : (
-                      whitelist.map((item) => (
-                        <tr key={item.id || item.mid} className="hover:bg-slate-50/80 transition">
-                          <td className="p-3 font-semibold text-slate-900">{item.name || 'Admin'}</td>
-                          <td className="p-3 font-mono text-[11px] text-slate-500">{item.mid}</td>
-                          <td className="p-3">
-                            <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-bold ${
-                              item.role === 'owner'
-                                ? 'bg-amber-50 text-amber-700 border border-amber-200'
-                                : 'bg-emerald-50 text-emerald-700 border border-emerald-200'
-                            }`}>
-                              {item.role === 'owner' ? '👑 Owner' : '🛡️ Admin'}
-                            </span>
-                          </td>
-                          <td className="p-3 text-right">
-                            {item.role !== 'owner' ? (
-                              <button
-                                onClick={() => handleDeleteWhitelist(item.mid)}
-                                className="text-red-500 hover:text-red-700 p-1.5 rounded-lg hover:bg-red-50 transition"
-                              >
-                                <Trash2 className="w-4 h-4" />
-                              </button>
-                            ) : (
-                              <span className="text-slate-400 text-[10px] font-medium">บอทหลัก</span>
-                            )}
-                          </td>
+              {isLoadingWhitelist ? (
+                <div className="p-8 text-center text-slate-400">
+                  <Loader2 className="w-6 h-6 animate-spin text-line mx-auto mb-2" />
+                  กำลังโหลดรายชื่อ Whitelist...
+                </div>
+              ) : whitelist.length === 0 ? (
+                <div className="p-6 text-center text-slate-400">ยังไม่มีรายชื่อผู้ดูแลใน Whitelist</div>
+              ) : (
+                <>
+                  {/* Mobile Card List (Visible on Mobile only) */}
+                  <div className="block md:hidden space-y-3">
+                    {whitelist.map((item) => (
+                      <div key={item.id || item.mid} className="bg-slate-50 border border-slate-200/80 rounded-xl p-3.5 space-y-2.5 shadow-sm">
+                        <div className="flex items-center justify-between gap-2">
+                          <div className="flex items-center space-x-2.5 min-w-0">
+                            <div className="w-8 h-8 rounded-xl bg-white border border-slate-200 flex items-center justify-center text-xs font-bold text-slate-700 shrink-0 shadow-sm">
+                              {item.name ? item.name[0] : 'A'}
+                            </div>
+                            <div className="min-w-0">
+                              <p className="font-bold text-slate-900 text-sm truncate">{item.name || 'Admin'}</p>
+                              <span className={`inline-block px-2 py-0.5 rounded-full text-[10px] font-bold mt-0.5 ${
+                                item.role === 'owner'
+                                  ? 'bg-amber-50 text-amber-700 border border-amber-200'
+                                  : 'bg-emerald-50 text-emerald-700 border border-emerald-200'
+                              }`}>
+                                {item.role === 'owner' ? '👑 Owner (บอทหลัก)' : '🛡️ Admin'}
+                              </span>
+                            </div>
+                          </div>
+
+                          {item.role !== 'owner' && (
+                            <button
+                              onClick={() => handleDeleteWhitelist(item.mid)}
+                              className="p-2 rounded-xl text-rose-500 hover:text-rose-700 hover:bg-rose-50 border border-rose-100 bg-white transition shrink-0 active:scale-95"
+                              title="ลบออกจาก Whitelist"
+                            >
+                              <Trash2 className="w-4 h-4" />
+                            </button>
+                          )}
+                        </div>
+
+                        <div className="bg-white border border-slate-200 rounded-lg px-2.5 py-1.5 flex items-center justify-between text-[11px] font-mono text-slate-500 overflow-hidden">
+                          <span className="truncate">{item.mid}</span>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+
+                  {/* Desktop Table (Visible on Desktop only) */}
+                  <div className="hidden md:block overflow-x-auto">
+                    <table className="w-full text-left text-xs text-slate-600">
+                      <thead className="bg-slate-50 text-slate-500 uppercase text-[10px] tracking-wider border-b border-slate-200">
+                        <tr>
+                          <th className="p-3 font-semibold">ชื่อ / ข้อมูล</th>
+                          <th className="p-3 font-semibold">LINE MID</th>
+                          <th className="p-3 font-semibold">สิทธิ์</th>
+                          <th className="p-3 text-right font-semibold">จัดการ</th>
                         </tr>
-                      ))
-                    )}
-                  </tbody>
-                </table>
-              </div>
+                      </thead>
+                      <tbody className="divide-y divide-slate-100">
+                        {whitelist.map((item) => (
+                          <tr key={item.id || item.mid} className="hover:bg-slate-50/80 transition">
+                            <td className="p-3 font-semibold text-slate-900">{item.name || 'Admin'}</td>
+                            <td className="p-3 font-mono text-[11px] text-slate-500">{item.mid}</td>
+                            <td className="p-3">
+                              <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-bold whitespace-nowrap ${
+                                item.role === 'owner'
+                                  ? 'bg-amber-50 text-amber-700 border border-amber-200'
+                                  : 'bg-emerald-50 text-emerald-700 border border-emerald-200'
+                              }`}>
+                                {item.role === 'owner' ? '👑 Owner' : '🛡️ Admin'}
+                              </span>
+                            </td>
+                            <td className="p-3 text-right">
+                              {item.role !== 'owner' ? (
+                                <button
+                                  onClick={() => handleDeleteWhitelist(item.mid)}
+                                  className="text-red-500 hover:text-red-700 p-1.5 rounded-lg hover:bg-red-50 transition"
+                                >
+                                  <Trash2 className="w-4 h-4" />
+                                </button>
+                              ) : (
+                                <span className="text-slate-400 text-[10px] font-medium">บอทหลัก</span>
+                              )}
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </>
+              )}
             </div>
           </div>
         </div>
@@ -523,76 +561,112 @@ export default function WhitelistPage() {
               </form>
             </div>
 
-            {/* Link Whitelist Table */}
-            <div className="light-card rounded-2xl p-6 md:col-span-2 space-y-4 shadow-sm">
+            {/* Link Whitelist Table / Mobile Cards */}
+            <div className="light-card rounded-2xl p-4 sm:p-6 md:col-span-2 space-y-4 shadow-sm">
               <div className="flex items-center justify-between">
                 <h3 className="text-base font-bold text-slate-900 flex items-center space-x-2">
-                  <Globe className="w-4 h-4 text-sky-600" />
+                  <Globe className="w-4 h-4 text-sky-600 shrink-0" />
                   <span>รายชื่อโดเมน/ลิงก์ที่อนุญาต (Allowed Links)</span>
                 </h3>
-                <span className="text-xs px-2.5 py-1 rounded-full bg-slate-100 text-slate-700 border border-slate-200 font-semibold">
+                <span className="text-xs px-2.5 py-1 rounded-full bg-slate-100 text-slate-700 border border-slate-200 font-semibold shrink-0">
                   {linkWhitelists.length} รายการ
                 </span>
               </div>
 
-              <div className="overflow-x-auto">
-                <table className="w-full text-left text-xs text-slate-600">
-                  <thead className="bg-slate-50 text-slate-500 uppercase text-[10px] tracking-wider border-b border-slate-200">
-                    <tr>
-                      <th className="p-3 font-semibold">โดเมน / รูปแบบลิงก์</th>
-                      <th className="p-3 font-semibold">คำอธิบาย</th>
-                      <th className="p-3 font-semibold">ขอบเขตกลุ่ม</th>
-                      <th className="p-3 text-right font-semibold">จัดการ</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-slate-100">
-                    {isLoadingLinks ? (
-                      <tr>
-                        <td colSpan="4" className="p-8 text-center text-slate-400">
-                          <Loader2 className="w-6 h-6 animate-spin text-sky-600 mx-auto mb-2" />
-                          กำลังโหลดรายชื่อ Link Whitelist...
-                        </td>
-                      </tr>
-                    ) : linkWhitelists.length === 0 ? (
-                      <tr>
-                        <td colSpan="4" className="p-6 text-center text-slate-400">ยังไม่มีรายชื่อลิงก์ที่ได้รับอนุญาต</td>
-                      </tr>
-                    ) : (
-                      linkWhitelists.map((item) => {
-                        const targetGroup = groups.find(g => (g.groupId || g.group_id) === item.group_id);
-                        const groupLabel = item.group_id === 'global' || !item.group_id ? '🌐 ทุกกลุ่ม' : (targetGroup?.groupName || 'กลุ่มเฉพาะ');
+              {isLoadingLinks ? (
+                <div className="p-8 text-center text-slate-400">
+                  <Loader2 className="w-6 h-6 animate-spin text-sky-600 mx-auto mb-2" />
+                  กำลังโหลดรายชื่อ Link Whitelist...
+                </div>
+              ) : linkWhitelists.length === 0 ? (
+                <div className="p-6 text-center text-slate-400">ยังไม่มีรายชื่อลิงก์ที่ได้รับอนุญาต</div>
+              ) : (
+                <>
+                  {/* Mobile Card List (Visible on Mobile only) */}
+                  <div className="block md:hidden space-y-3">
+                    {linkWhitelists.map((item) => {
+                      const targetGroup = groups.find(g => (g.groupId || g.group_id) === item.group_id);
+                      const groupLabel = item.group_id === 'global' || !item.group_id ? '🌐 ทุกกลุ่ม' : (targetGroup?.groupName || 'กลุ่มเฉพาะ');
 
-                        return (
-                          <tr key={item.id || item.pattern} className="hover:bg-slate-50/80 transition">
-                            <td className="p-3 font-mono font-bold text-sky-700 flex items-center space-x-1.5">
-                              <Globe className="w-3.5 h-3.5 text-sky-500" />
-                              <span>{item.pattern}</span>
-                            </td>
-                            <td className="p-3 text-slate-700">{item.description || '-'}</td>
-                            <td className="p-3">
-                              <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-semibold border ${
-                                item.group_id === 'global' || !item.group_id
-                                  ? 'bg-sky-50 text-sky-700 border-sky-200'
-                                  : 'bg-indigo-50 text-indigo-700 border-indigo-200'
-                              }`}>
-                                {groupLabel}
-                              </span>
-                            </td>
-                            <td className="p-3 text-right">
-                              <button
-                                onClick={() => handleDeleteLink(item.id || item.pattern)}
-                                className="text-red-500 hover:text-red-700 p-1.5 rounded-lg hover:bg-red-50 transition"
-                              >
-                                <Trash2 className="w-4 h-4" />
-                              </button>
-                            </td>
-                          </tr>
-                        );
-                      })
-                    )}
-                  </tbody>
-                </table>
-              </div>
+                      return (
+                        <div key={item.id || item.pattern} className="bg-slate-50 border border-slate-200/80 rounded-xl p-3.5 space-y-2.5 shadow-sm">
+                          <div className="flex items-center justify-between gap-2">
+                            <div className="font-mono font-bold text-sky-700 text-sm flex items-center space-x-1.5 min-w-0">
+                              <Globe className="w-4 h-4 text-sky-500 shrink-0" />
+                              <span className="truncate">{item.pattern}</span>
+                            </div>
+                            <button
+                              onClick={() => handleDeleteLink(item.id || item.pattern)}
+                              className="p-2 rounded-xl text-rose-500 hover:text-rose-700 hover:bg-rose-50 border border-rose-100 bg-white transition shrink-0 active:scale-95"
+                              title="ลบออกจาก Link Whitelist"
+                            >
+                              <Trash2 className="w-4 h-4" />
+                            </button>
+                          </div>
+
+                          <div className="flex items-center justify-between gap-2 text-xs">
+                            <p className="text-slate-600 truncate">{item.description || 'ไม่มีคำอธิบาย'}</p>
+                            <span className={`px-2 py-0.5 rounded-full text-[10px] font-semibold border shrink-0 ${
+                              item.group_id === 'global' || !item.group_id
+                                ? 'bg-sky-50 text-sky-700 border-sky-200'
+                                : 'bg-indigo-50 text-indigo-700 border-indigo-200'
+                            }`}>
+                              {groupLabel}
+                            </span>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+
+                  {/* Desktop Table (Visible on Desktop only) */}
+                  <div className="hidden md:block overflow-x-auto">
+                    <table className="w-full text-left text-xs text-slate-600">
+                      <thead className="bg-slate-50 text-slate-500 uppercase text-[10px] tracking-wider border-b border-slate-200">
+                        <tr>
+                          <th className="p-3 font-semibold">โดเมน / รูปแบบลิงก์</th>
+                          <th className="p-3 font-semibold">คำอธิบาย</th>
+                          <th className="p-3 font-semibold">ขอบเขตกลุ่ม</th>
+                          <th className="p-3 text-right font-semibold">จัดการ</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-slate-100">
+                        {linkWhitelists.map((item) => {
+                          const targetGroup = groups.find(g => (g.groupId || g.group_id) === item.group_id);
+                          const groupLabel = item.group_id === 'global' || !item.group_id ? '🌐 ทุกกลุ่ม' : (targetGroup?.groupName || 'กลุ่มเฉพาะ');
+
+                          return (
+                            <tr key={item.id || item.pattern} className="hover:bg-slate-50/80 transition">
+                              <td className="p-3 font-mono font-bold text-sky-700 flex items-center space-x-1.5">
+                                <Globe className="w-3.5 h-3.5 text-sky-500" />
+                                <span>{item.pattern}</span>
+                              </td>
+                              <td className="p-3 text-slate-700">{item.description || '-'}</td>
+                              <td className="p-3">
+                                <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-semibold border whitespace-nowrap ${
+                                  item.group_id === 'global' || !item.group_id
+                                    ? 'bg-sky-50 text-sky-700 border-sky-200'
+                                    : 'bg-indigo-50 text-indigo-700 border-indigo-200'
+                                }`}>
+                                  {groupLabel}
+                                </span>
+                              </td>
+                              <td className="p-3 text-right">
+                                <button
+                                  onClick={() => handleDeleteLink(item.id || item.pattern)}
+                                  className="text-red-500 hover:text-red-700 p-1.5 rounded-lg hover:bg-red-50 transition"
+                                >
+                                  <Trash2 className="w-4 h-4" />
+                                </button>
+                              </td>
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                    </table>
+                  </div>
+                </>
+              )}
             </div>
           </div>
         </div>

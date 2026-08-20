@@ -11,8 +11,10 @@ import {
   CheckCircle2,
   Loader2
 } from 'lucide-react';
+import { useToast } from '../components/ToastProvider';
 
 export default function DashboardPage() {
+  const { toast, confirmModal } = useToast();
   const [statusData, setStatusData] = useState({
     status: 'offline',
     profile: null,
@@ -47,9 +49,9 @@ export default function DashboardPage() {
     try {
       const res = await fetch('/api/login/qr', { method: 'POST' });
       const json = await res.json();
-      if (!json.success) alert(json.message);
+      if (!json.success) toast.error(json.message);
     } catch (err) {
-      alert('เกิดข้อผิดพลาด: ' + err.message);
+      toast.error('เกิดข้อผิดพลาด: ' + err.message);
     } finally {
       setIsStartingLogin(false);
     }
@@ -58,18 +60,29 @@ export default function DashboardPage() {
   const handleCancelLogin = async () => {
     try {
       await fetch('/api/login/cancel', { method: 'POST' });
+      toast.info('ยกเลิกการสร้าง QR Code เรียบร้อย');
     } catch (err) {
       console.error(err);
     }
   };
 
   const handleLogout = async () => {
-    if (!confirm('คุณต้องการออกจากระบบ LINE หรือไม่?')) return;
+    const confirmed = await confirmModal({
+      title: 'ออกจากระบบ LINE',
+      message: 'คุณต้องการออกจากระบบ LINE หรือไม่? (บอทจะหยุดทำงานและกลับสู่สถานะออฟไลน์)',
+      confirmText: 'ออกจากระบบ',
+      cancelText: 'ยกเลิก',
+      type: 'danger'
+    });
+
+    if (!confirmed) return;
+
     try {
       await fetch('/api/logout', { method: 'POST' });
-      window.location.reload();
+      toast.success('ออกจากระบบ LINE เรียบร้อยแล้ว');
+      setTimeout(() => window.location.reload(), 1000);
     } catch (err) {
-      alert('ออกจากระบบไม่สำเร็จ: ' + err.message);
+      toast.error('ออกจากระบบไม่สำเร็จ: ' + err.message);
     }
   };
 
@@ -106,9 +119,6 @@ export default function DashboardPage() {
                 <h2 className="text-lg sm:text-xl font-bold text-slate-900 truncate">
                   {statusData.profile?.displayName || 'LINE Guardian Bot'}
                 </h2>
-                <p className="text-xs text-slate-500 font-mono mt-0.5 truncate max-w-[200px] sm:max-w-none">
-                  MID: {statusData.profile?.mid || 'ยังไม่ได้ล็อกอิน'}
-                </p>
                 <div className="flex items-center space-x-2 mt-1.5">
                   <span className={`px-2.5 py-0.5 rounded-full text-[11px] sm:text-xs font-semibold border ${
                     isOnline

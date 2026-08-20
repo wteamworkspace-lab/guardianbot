@@ -6,19 +6,23 @@ import {
   RefreshCw,
   Loader2
 } from 'lucide-react';
+import { useToast } from '../../components/ToastProvider';
 
 export default function LogsPage() {
+  const { toast } = useToast();
   const [logs, setLogs] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
 
-  const fetchLogs = async () => {
+  const fetchLogs = async (isManual = false) => {
     setIsLoading(true);
     try {
       const res = await fetch('/api/logs?limit=50');
       const json = await res.json();
       setLogs(json.data || []);
+      if (isManual) toast.success('รีเฟรชประวัติกิจกรรมเรียบร้อยแล้ว');
     } catch (err) {
       console.error(err);
+      if (isManual) toast.error('เกิดข้อผิดพลาดในการโหลดประวัติ: ' + err.message);
     } finally {
       setIsLoading(false);
     }
@@ -42,7 +46,7 @@ export default function LogsPage() {
           </p>
         </div>
         <button
-          onClick={fetchLogs}
+          onClick={() => fetchLogs(true)}
           disabled={isLoading}
           className="w-full sm:w-auto px-4 py-2 sm:py-2.5 rounded-xl bg-white hover:bg-slate-50 text-slate-700 text-xs font-semibold flex items-center justify-center space-x-2 transition border border-slate-200 shadow-sm active:scale-95 shrink-0"
         >
@@ -82,7 +86,7 @@ export default function LogsPage() {
                 const timeStr = new Date(l.created_at).toLocaleString('th-TH');
 
                 return (
-                  <div key={l.id || Math.random()} className="bg-slate-50 border border-slate-200/80 rounded-xl p-3.5 space-y-2.5 shadow-sm">
+                  <div key={l.id || Math.random()} className="bg-slate-50 border border-slate-200/80 rounded-2xl p-3.5 space-y-2 shadow-sm">
                     {/* Header: Action Badge & Time */}
                     <div className="flex items-center justify-between gap-2">
                       <span className={`px-2.5 py-1 rounded-lg text-[11px] font-bold border ${badgeClass}`}>
@@ -101,17 +105,14 @@ export default function LogsPage() {
                       </div>
                       <div className="flex items-center space-x-1.5">
                         <span className="text-slate-400 font-medium shrink-0">ผู้กระทำผิด:</span>
-                        <span className="font-semibold text-slate-800 truncate">{l.user_name || 'Unknown'}</span>
-                        {l.user_mid && (
-                          <span className="text-[10px] font-mono text-slate-400 truncate">({l.user_mid})</span>
-                        )}
+                        <span className="font-semibold text-slate-800 truncate">{l.user_name || 'Unknown User'}</span>
                       </div>
                     </div>
 
                     {/* Reason / Details */}
                     {(l.reason || l.details) && (
-                      <div className="bg-white border border-slate-200 rounded-lg p-2 text-xs space-y-0.5 break-all">
-                        {l.reason && <p className="font-medium text-slate-800">{l.reason}</p>}
+                      <div className="bg-white border border-slate-200 rounded-xl p-2.5 text-xs space-y-0.5 break-all">
+                        {l.reason && <p className="font-semibold text-slate-800">{l.reason}</p>}
                         {l.details && <p className="text-[11px] text-slate-500">{l.details}</p>}
                       </div>
                     )}
@@ -158,9 +159,8 @@ export default function LogsPage() {
                             {badgeText}
                           </span>
                         </td>
-                        <td className="p-3.5 font-mono text-[11px] text-slate-700">
-                          <div className="font-semibold text-slate-900">{l.user_name || 'Unknown'}</div>
-                          <div className="text-[9px] text-slate-400">{l.user_mid || ''}</div>
+                        <td className="p-3.5">
+                          <div className="font-semibold text-slate-900">{l.user_name || 'Unknown User'}</div>
                         </td>
                         <td className="p-3.5 text-slate-600">
                           <div className="font-medium text-slate-800">{l.reason || '-'}</div>

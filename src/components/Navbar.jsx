@@ -17,6 +17,7 @@ import {
   AlertCircle,
   Loader2
 } from 'lucide-react';
+import { useToast } from './ToastProvider';
 
 export default function Navbar() {
   const pathname = usePathname();
@@ -92,10 +93,21 @@ export default function Navbar() {
     return null;
   }
 
-  const handleLogout = () => {
-    if (window.confirm('คุณต้องการออกจากระบบจัดการ (BackOffice) ใช่หรือไม่?')) {
+  const { toast, confirmModal } = useToast();
+
+  const handleLogout = async () => {
+    const confirmed = await confirmModal({
+      title: 'ออกจากระบบ BackOffice',
+      message: 'คุณต้องการออกจากระบบจัดการ (BackOffice) ใช่หรือไม่?',
+      confirmText: 'ออกจากระบบ',
+      cancelText: 'ยกเลิก',
+      type: 'danger'
+    });
+
+    if (confirmed) {
       localStorage.removeItem('guardian_token');
       localStorage.removeItem('guardian_user');
+      toast.info('ออกจากระบบจัดการเรียบร้อยแล้ว');
       router.push('/login');
     }
   };

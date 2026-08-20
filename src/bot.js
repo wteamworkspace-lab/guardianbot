@@ -270,15 +270,17 @@ export class BotGuardian extends EventEmitter {
 
         try {
             const myProfile = await client.getMyProfile();
+            const rawBotPic = myProfile.pictureUrl || myProfile.picturePath;
+            const fullBotPic = rawBotPic ? (rawBotPic.startsWith('http') ? rawBotPic : `https://profile.line-scdn.net${rawBotPic}`) : null;
             this.profile = {
                 mid: myProfile.mid,
                 displayName: myProfile.displayName,
-                pictureUrl: myProfile.pictureUrl,
+                pictureUrl: fullBotPic,
                 statusMessage: myProfile.statusMessage
             };
             this.botMid = myProfile.mid;
             this.displayName = myProfile.displayName;
-            this.pictureUrl = myProfile.pictureUrl;
+            this.pictureUrl = fullBotPic;
             this.authToken = authToken;
 
             // Automatically whitelist this bot as owner/bot
@@ -310,14 +312,20 @@ export class BotGuardian extends EventEmitter {
             this.cachedGroups.clear();
             for (const chat of chats) {
                 if (chat.mid && chat.mid.startsWith('c')) {
+                    const rawPic = chat.raw?.picturePath || chat.picturePath;
+                    const pictureUrl = rawPic ? (rawPic.startsWith('http') ? rawPic : `https://profile.line-scdn.net${rawPic}`) : null;
+
                     this.cachedGroups.set(chat.mid, {
                         groupId: chat.mid,
                         groupName: chat.name || 'Unnamed Group',
-                        pictureUrl: chat.raw?.picturePath || null,
+                        pictureUrl,
                         memberCount: chat.raw?.memberCount || 0
                     });
 
-                    await db.getGroupSettings(chat.mid);
+                    await db.saveGroupSettings(chat.mid, {
+                        group_name: chat.name || 'Unnamed Group',
+                        group_picture_url: pictureUrl
+                    });
                 }
             }
             console.log(`📋 [${this.displayName}] Synced ${this.cachedGroups.size} LINE Groups.`);

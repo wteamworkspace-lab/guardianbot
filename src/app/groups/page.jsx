@@ -129,16 +129,35 @@ export default function GroupsPage() {
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4 sm:gap-6">
           {groups.map((g) => {
             const gId = g.groupId || g.group_id;
+            const rawPic = g.pictureUrl || g.group_picture_url;
+            const fullPicUrl = rawPic ? (rawPic.startsWith('http') ? rawPic : `https://profile.line-scdn.net${rawPic}`) : null;
+            const groupFirstChar = (g.groupName || 'ก').trim().charAt(0);
+
             return (
               <div key={gId} className="light-card rounded-2xl p-4 sm:p-6 space-y-4 shadow-sm hover:shadow-md transition">
                 <div className="flex items-start justify-between gap-3">
                   <div className="flex items-center space-x-3 min-w-0">
-                    <div className="w-11 h-11 sm:w-12 sm:h-12 rounded-xl bg-slate-100 border border-slate-200 flex items-center justify-center text-slate-500 font-bold overflow-hidden shadow-inner shrink-0">
-                      {g.pictureUrl ? (
-                        <img src={g.pictureUrl} alt="Group" className="w-full h-full object-cover" />
-                      ) : (
-                        <MessageSquare className="w-5 h-5 sm:w-6 sm:h-6 text-line" />
+                    <div className="w-12 h-12 sm:w-14 sm:h-14 rounded-2xl bg-gradient-to-br from-emerald-500 to-teal-700 text-white font-bold flex items-center justify-center overflow-hidden shadow-md shadow-emerald-500/10 border border-slate-100 shrink-0 relative">
+                      {fullPicUrl && (
+                        <img
+                          src={fullPicUrl}
+                          alt="Group"
+                          className="w-full h-full object-cover"
+                          onError={(e) => {
+                            e.currentTarget.style.display = 'none';
+                            if (e.currentTarget.nextElementSibling) {
+                              e.currentTarget.nextElementSibling.style.display = 'flex';
+                            }
+                          }}
+                        />
                       )}
+                      <div
+                        className={`w-full h-full items-center justify-center bg-gradient-to-br from-emerald-500 via-teal-600 to-slate-800 text-white font-bold text-lg ${
+                          fullPicUrl ? 'hidden' : 'flex'
+                        }`}
+                      >
+                        {groupFirstChar}
+                      </div>
                     </div>
                     <div className="min-w-0">
                       <h4 className="font-bold text-slate-900 text-sm sm:text-base truncate">{g.groupName || 'กลุ่ม LINE'}</h4>

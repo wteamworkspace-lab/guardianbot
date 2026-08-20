@@ -106,8 +106,8 @@ export function ToastProvider({ children }) {
 
       {/* Confirmation Dialog Modal */}
       {confirmDialog && (
-        <div className="fixed inset-0 z-[99999] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm animate-fade-in">
-          <div className="bg-white rounded-3xl p-6 sm:p-7 max-w-sm sm:max-w-md w-full shadow-2xl border border-slate-100 space-y-4 animate-scale-up">
+        <div className="fixed inset-0 z-[99999] flex items-center justify-center p-4 bg-black/5 animate-fade-in">
+          <div className="bg-white rounded-3xl p-6 sm:p-7 max-w-sm sm:max-w-md w-full shadow-2xl shadow-slate-900/25 border border-slate-200 space-y-4 animate-scale-up ring-1 ring-slate-900/5">
             <div className="flex items-start gap-3.5">
               <div className={`w-11 h-11 rounded-2xl flex items-center justify-center shrink-0 border ${
                 confirmDialog.type === 'danger'

@@ -262,8 +262,8 @@ export default function Navbar() {
 
       {/* Change Password Modal */}
       {showPasswordModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm animate-fade-in">
-          <div className="bg-white rounded-3xl p-6 sm:p-8 max-w-md w-full shadow-2xl border border-slate-100 relative">
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/5 animate-fade-in">
+          <div className="bg-white rounded-3xl p-6 sm:p-8 max-w-md w-full shadow-2xl shadow-slate-900/25 border border-slate-200 relative ring-1 ring-slate-900/5">
             <button
               onClick={() => {
                 setShowPasswordModal(false);

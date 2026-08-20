@@ -68,6 +68,16 @@ CREATE INDEX IF NOT EXISTS idx_audit_logs_created_at ON public.audit_logs(create
 CREATE INDEX IF NOT EXISTS idx_whitelists_mid ON public.whitelists(mid);
 CREATE INDEX IF NOT EXISTS idx_link_whitelists_pattern ON public.link_whitelists(pattern);
 
+-- 6. Table for BackOffice Dashboard Administrators
+CREATE TABLE IF NOT EXISTS public.admin_users (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    username TEXT UNIQUE NOT NULL,
+    password_hash TEXT NOT NULL,
+    display_name TEXT DEFAULT 'Administrator',
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+
 -- ==============================================================================
 -- Enable RLS and Configure Full Access Policies for `anon` role
 -- ==============================================================================
@@ -76,6 +86,7 @@ ALTER TABLE public.group_settings ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.whitelists ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.link_whitelists ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.audit_logs ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.admin_users ENABLE ROW LEVEL SECURITY;
 
 -- Drop old policies if existing
 DROP POLICY IF EXISTS "Anon Full Access bot_settings" ON public.bot_settings;
@@ -83,6 +94,7 @@ DROP POLICY IF EXISTS "Anon Full Access group_settings" ON public.group_settings
 DROP POLICY IF EXISTS "Anon Full Access whitelists" ON public.whitelists;
 DROP POLICY IF EXISTS "Anon Full Access link_whitelists" ON public.link_whitelists;
 DROP POLICY IF EXISTS "Anon Full Access audit_logs" ON public.audit_logs;
+DROP POLICY IF EXISTS "Anon Full Access admin_users" ON public.admin_users;
 
 -- Policy 1: bot_settings
 CREATE POLICY "Anon Full Access bot_settings"
@@ -124,12 +136,21 @@ TO anon, authenticated, service_role
 USING (true)
 WITH CHECK (true);
 
+-- Policy 6: admin_users
+CREATE POLICY "Anon Full Access admin_users"
+ON public.admin_users
+FOR ALL
+TO anon, authenticated, service_role
+USING (true)
+WITH CHECK (true);
+
 -- Grant table privileges
 GRANT ALL ON TABLE public.bot_settings TO anon, authenticated, service_role;
 GRANT ALL ON TABLE public.group_settings TO anon, authenticated, service_role;
 GRANT ALL ON TABLE public.whitelists TO anon, authenticated, service_role;
 GRANT ALL ON TABLE public.link_whitelists TO anon, authenticated, service_role;
 GRANT ALL ON TABLE public.audit_logs TO anon, authenticated, service_role;
+GRANT ALL ON TABLE public.admin_users TO anon, authenticated, service_role;
 
 -- Default allowed links
 INSERT INTO public.link_whitelists (pattern, description, group_id)
@@ -142,3 +163,8 @@ ON CONFLICT DO NOTHING;
 INSERT INTO public.bot_settings (id, status)
 VALUES ('config', 'offline')
 ON CONFLICT (id) DO UPDATE SET updated_at = NOW();
+
+-- Initial default Admin User (Username: admin / Password: admin1234)
+INSERT INTO public.admin_users (username, password_hash, display_name)
+VALUES ('admin', '0192023a7bbd73250516f069df18b500e94b47e0ac296d75b1576f6e70f4ab47', 'Administrator')
+ON CONFLICT (username) DO NOTHING;

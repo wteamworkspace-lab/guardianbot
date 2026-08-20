@@ -60,6 +60,53 @@ app.prepare().then(async () => {
     });
 
     // -------------------------------------------------------------------------
+    // Admin User Auth APIs
+    // -------------------------------------------------------------------------
+    server.post('/api/auth/login', async (req, res) => {
+        try {
+            const { username, password } = req.body;
+            const result = await db.verifyAdminLogin(username, password);
+            if (result.success) {
+                res.json(result);
+            } else {
+                res.status(401).json(result);
+            }
+        } catch (e) {
+            res.status(500).json({ success: false, message: e.message });
+        }
+    });
+
+    server.get('/api/auth/me', (req, res) => {
+        const authHeader = req.headers.authorization;
+        const token = authHeader && authHeader.startsWith('Bearer ') ? authHeader.substring(7) : null;
+        if (!token) return res.status(401).json({ success: false, message: 'Unauthorized' });
+
+        const payload = db.verifyToken(token);
+        if (!payload) return res.status(401).json({ success: false, message: 'Invalid or expired token' });
+
+        res.json({ success: true, user: { username: payload.username, displayName: payload.displayName } });
+    });
+
+    server.post('/api/auth/change-password', async (req, res) => {
+        try {
+            const authHeader = req.headers.authorization;
+            const token = authHeader && authHeader.startsWith('Bearer ') ? authHeader.substring(7) : null;
+            const payload = db.verifyToken(token);
+            if (!payload) return res.status(401).json({ success: false, message: 'Unauthorized' });
+
+            const { oldPassword, newPassword } = req.body;
+            const result = await db.changeAdminPassword(payload.username, oldPassword, newPassword);
+            if (result.success) {
+                res.json(result);
+            } else {
+                res.status(400).json(result);
+            }
+        } catch (e) {
+            res.status(500).json({ success: false, message: e.message });
+        }
+    });
+
+    // -------------------------------------------------------------------------
     // Bot Management APIs
     // -------------------------------------------------------------------------
     server.get('/api/status', (req, res) => {

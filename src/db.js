@@ -2,6 +2,7 @@ import 'dotenv/config';
 import { createClient } from '@supabase/supabase-js';
 import fs from 'fs';
 import path from 'path';
+import crypto from 'crypto';
 import { fileURLToPath } from 'url';
 
 const __filename = fileURLToPath(import.meta.url);
@@ -415,6 +416,112 @@ const db = {
             } catch (e) {}
         }
         return localStore.audit_logs.slice(0, limit);
+    },
+
+    // -------------------------------------------------------------------------
+    // BackOffice Admin User Authentication
+    // -------------------------------------------------------------------------
+    hashPassword(password) {
+        return crypto.createHash('sha256').update(password).digest('hex');
+    },
+
+    createToken(payload) {
+        const secret = process.env.SUPABASE_ANON_KEY || 'guardian_secret_key_2026';
+        const header = Buffer.from(JSON.stringify({ alg: 'HS256', typ: 'JWT' })).toString('base64url');
+        const data = Buffer.from(JSON.stringify({ ...payload, exp: Date.now() + 7 * 24 * 60 * 60 * 1000 })).toString('base64url');
+        const signature = crypto.createHmac('sha256', secret).update(`${header}.${data}`).digest('base64url');
+        return `${header}.${data}.${signature}`;
+    },
+
+    verifyToken(token) {
+        if (!token || typeof token !== 'string') return null;
+        const secret = process.env.SUPABASE_ANON_KEY || 'guardian_secret_key_2026';
+        const parts = token.split('.');
+        if (parts.length !== 3) return null;
+        const [header, data, signature] = parts;
+        const expected = crypto.createHmac('sha256', secret).update(`${header}.${data}`).digest('base64url');
+        if (signature !== expected) return null;
+        try {
+            const payload = JSON.parse(Buffer.from(data, 'base64url').toString('utf8'));
+            if (payload.exp && payload.exp < Date.now()) return null;
+            return payload;
+        } catch (e) {
+            return null;
+        }
+    },
+
+    async verifyAdminLogin(username, password) {
+        if (!username || !password) return { success: false, message: 'กรุณากรอกชื่อผู้ใช้และรหัสผ่าน' };
+        const passHash = this.hashPassword(password);
+        const defaultPass = process.env.DASHBOARD_PASS || 'admin1234';
+
+        if (supabase) {
+            try {
+                const { data, error } = await supabase
+                    .from('admin_users')
+                    .select('*')
+                    .eq('username', username.trim().toLowerCase())
+                    .single();
+
+                if (data) {
+                    if (data.password_hash === passHash) {
+                        const token = this.createToken({ id: data.id, username: data.username, displayName: data.display_name });
+                        return {
+                            success: true,
+                            token,
+                            user: { username: data.username, displayName: data.display_name }
+                        };
+                    } else {
+                        return { success: false, message: 'รหัสผ่านไม่ถูกต้อง' };
+                    }
+                }
+            } catch (e) {}
+        }
+
+        // Fallback / First run check with default credentials
+        if (username.trim().toLowerCase() === 'admin' && (password === defaultPass || passHash === this.hashPassword(defaultPass))) {
+            // Save admin to Supabase if available
+            if (supabase) {
+                try {
+                    await supabase.from('admin_users').upsert({
+                        username: 'admin',
+                        password_hash: passHash,
+                        display_name: 'Administrator'
+                    });
+                } catch (e) {}
+            }
+
+            const token = this.createToken({ id: 'admin-root', username: 'admin', displayName: 'Administrator' });
+            return {
+                success: true,
+                token,
+                user: { username: 'admin', displayName: 'Administrator' }
+            };
+        }
+
+        return { success: false, message: 'ไม่พบบัญชีผู้ใช้นี้ในระบบ' };
+    },
+
+    async changeAdminPassword(username, oldPassword, newPassword) {
+        if (!username || !oldPassword || !newPassword) return { success: false, message: 'กรุณากรอกข้อมูลให้ครบถ้วน' };
+        if (newPassword.length < 6) return { success: false, message: 'รหัสผ่านใหม่ต้องมีความยาวอย่างน้อย 6 ตัวอักษร' };
+
+        const loginRes = await this.verifyAdminLogin(username, oldPassword);
+        if (!loginRes.success) return { success: false, message: 'รหัสผ่านเดิมไม่ถูกต้อง' };
+
+        const newHash = this.hashPassword(newPassword);
+        if (supabase) {
+            try {
+                await supabase.from('admin_users').update({
+                    password_hash: newHash,
+                    updated_at: new Date().toISOString()
+                }).eq('username', username.trim().toLowerCase());
+                return { success: true, message: 'เปลี่ยนรหัสผ่านสำเร็จเรียบร้อยแล้ว' };
+            } catch (e) {
+                return { success: false, message: e.message };
+            }
+        }
+        return { success: true, message: 'เปลี่ยนรหัสผ่านสำเร็จเรียบร้อยแล้ว' };
     }
 };
 

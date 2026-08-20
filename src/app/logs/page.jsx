@@ -1,0 +1,125 @@
+'use client';
+
+import React, { useState, useEffect } from 'react';
+import {
+  ClipboardList,
+  RefreshCw,
+  Loader2
+} from 'lucide-react';
+
+export default function LogsPage() {
+  const [logs, setLogs] = useState([]);
+  const [isLoading, setIsLoading] = useState(true);
+
+  const fetchLogs = async () => {
+    setIsLoading(true);
+    try {
+      const res = await fetch('/api/logs?limit=50');
+      const json = await res.json();
+      setLogs(json.data || []);
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchLogs();
+  }, []);
+
+  return (
+    <div className="space-y-6">
+      
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+        <div>
+          <h2 className="text-xl font-bold text-slate-900 flex items-center space-x-2">
+            <ClipboardList className="w-6 h-6 text-line" />
+            <span>ประวัติการตรวจจับและเตะผู้กระทำผิด (Audit Logs)</span>
+          </h2>
+          <p className="text-sm text-slate-500 mt-0.5">
+            บันทึกเหตุการณ์ทุกครั้งที่มีการเตะคนส่งลิงก์ เชิญมั่ว หรือเตะคนอื่น
+          </p>
+        </div>
+        <button
+          onClick={fetchLogs}
+          disabled={isLoading}
+          className="px-4 py-2.5 rounded-xl bg-white hover:bg-slate-50 text-slate-700 text-xs font-semibold flex items-center space-x-2 transition border border-slate-200 shadow-sm self-start sm:self-auto active:scale-95"
+        >
+          <RefreshCw className={`w-4 h-4 text-slate-600 ${isLoading ? 'animate-spin' : ''}`} />
+          <span>รีเฟรชประวัติ</span>
+        </button>
+      </div>
+
+      <div className="light-card rounded-2xl p-6 space-y-4 shadow-sm">
+        <div className="overflow-x-auto">
+          <table className="w-full text-left text-xs text-slate-600">
+            <thead className="bg-slate-50 text-slate-500 uppercase text-[10px] tracking-wider border-b border-slate-200">
+              <tr>
+                <th className="p-3.5 font-semibold">วัน-เวลา</th>
+                <th className="p-3.5 font-semibold">กลุ่ม</th>
+                <th className="p-3.5 font-semibold">ประเภทเหตุการณ์</th>
+                <th className="p-3.5 font-semibold">ผู้กระทำผิด</th>
+                <th className="p-3.5 font-semibold">สาเหตุ / รายละเอียด</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-slate-100">
+              {isLoading ? (
+                <tr>
+                  <td colSpan="5" className="p-10 text-center text-slate-400">
+                    <Loader2 className="w-6 h-6 animate-spin text-line mx-auto mb-2" />
+                    กำลังโหลดประวัติ...
+                  </td>
+                </tr>
+              ) : logs.length === 0 ? (
+                <tr>
+                  <td colSpan="5" className="p-10 text-center text-slate-400">
+                    ยังไม่มีประวัติการกระทำผิด (ระบบกำลังเฝ้าระวัง 24 ชม.)
+                  </td>
+                </tr>
+              ) : (
+                logs.map((l) => {
+                  let badgeClass = 'bg-slate-100 text-slate-700 border-slate-200';
+                  let badgeText = l.action_type;
+                  if (l.action_type === 'anti_link') {
+                    badgeClass = 'bg-red-50 text-red-700 border-red-200';
+                    badgeText = '🔗 Anti-Link';
+                  } else if (l.action_type === 'anti_invite') {
+                    badgeClass = 'bg-amber-50 text-amber-700 border-amber-200';
+                    badgeText = '👥 Anti-Invite';
+                  } else if (l.action_type === 'anti_kick') {
+                    badgeClass = 'bg-purple-50 text-purple-700 border-purple-200';
+                    badgeText = '⚡ Anti-Kick';
+                  }
+
+                  const timeStr = new Date(l.created_at).toLocaleString('th-TH');
+
+                  return (
+                    <tr key={l.id || Math.random()} className="hover:bg-slate-50/80 transition">
+                      <td className="p-3.5 font-mono text-[11px] text-slate-500 whitespace-nowrap">{timeStr}</td>
+                      <td className="p-3.5 font-semibold text-slate-900">{l.group_name || 'Group'}</td>
+                      <td className="p-3.5">
+                        <span className={`px-2.5 py-0.5 rounded-md text-[10px] font-bold border ${badgeClass}`}>
+                          {badgeText}
+                        </span>
+                      </td>
+                      <td className="p-3.5 font-mono text-[11px] text-slate-700">
+                        <div className="font-semibold text-slate-900">{l.user_name || 'Unknown'}</div>
+                        <div className="text-[9px] text-slate-400">{l.user_mid || ''}</div>
+                      </td>
+                      <td className="p-3.5 text-slate-600">
+                        <div className="font-medium text-slate-800">{l.reason || '-'}</div>
+                        <div className="text-[10px] text-slate-400 mt-0.5">{l.details || ''}</div>
+                      </td>
+                    </tr>
+                  );
+                })
+              )}
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+    </div>
+  );
+}

@@ -65,12 +65,12 @@ export default function AuthWrapper({ children }) {
   // If checking authentication, show glowing loading screen
   if (isChecking) {
     return (
-      <div className="min-h-screen bg-slate-950 flex flex-col items-center justify-center p-4">
-        <div className="w-16 h-16 rounded-2xl bg-emerald-500/10 text-emerald-400 flex items-center justify-center mb-4 ring-4 ring-emerald-500/20 shadow-lg shadow-emerald-500/20">
+      <div className="min-h-screen bg-slate-50 flex flex-col items-center justify-center p-4">
+        <div className="w-16 h-16 rounded-2xl bg-line text-white flex items-center justify-center mb-4 shadow-xl shadow-line/25 ring-4 ring-emerald-50">
           <ShieldCheck className="w-8 h-8 animate-pulse" />
         </div>
-        <div className="flex items-center gap-2 text-slate-300 text-sm font-medium">
-          <Loader2 className="w-4 h-4 animate-spin text-emerald-400" />
+        <div className="flex items-center gap-2 text-slate-600 text-sm font-medium">
+          <Loader2 className="w-4 h-4 animate-spin text-line" />
           <span>กำลังตรวจสอบสิทธิ์เข้าถึง (Authenticating)...</span>
         </div>
       </div>

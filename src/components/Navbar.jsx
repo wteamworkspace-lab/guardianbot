@@ -73,9 +73,36 @@ export default function Navbar() {
   useEffect(() => {
     if (pathname === '/login') return;
 
+    const fetchStatus = async () => {
+      try {
+        const res = await fetch('/api/status');
+        const json = await res.json();
+        if (json.success && json.data) {
+          setStatusData(json.data);
+        }
+      } catch (e) {}
+    };
+    fetchStatus();
+
     let eventSource;
     try {
       eventSource = new EventSource('/api/events');
+      
+      eventSource.addEventListener('bots_update', (e) => {
+        try {
+          const data = JSON.parse(e.data);
+          if (data.bots) {
+            const onlineCount = data.bots.filter(b => b.status === 'online').length;
+            setStatusData(prev => ({
+              ...prev,
+              status: onlineCount > 0 ? 'online' : 'offline',
+              onlineBots: onlineCount,
+              totalBots: data.bots.length
+            }));
+          }
+        } catch (err) {}
+      });
+
       eventSource.addEventListener('status', (e) => {
         try {
           const data = JSON.parse(e.data);
@@ -198,14 +225,14 @@ export default function Navbar() {
                   ? 'bg-emerald-50 border-emerald-200 text-emerald-800'
                   : isWaitingAuth
                   ? 'bg-amber-50 border-amber-200 text-amber-800'
-                  : 'bg-red-50 border-red-200 text-red-800'
+                  : 'bg-red-50 border-red-200 text-red-700'
               }`}>
                 <span className={`w-2 h-2 sm:w-2.5 sm:h-2.5 rounded-full shrink-0 ${
-                  isOnline ? 'bg-emerald-500' : isWaitingAuth ? 'bg-amber-500 animate-ping' : 'bg-red-500'
+                  isOnline ? 'bg-emerald-500 animate-pulse' : isWaitingAuth ? 'bg-amber-500 animate-ping' : 'bg-red-500'
                 }`}></span>
                 <span className="truncate max-w-[90px] xs:max-w-none">
                   {isOnline
-                    ? 'ออนไลน์'
+                    ? (statusData.onlineBots ? `ออนไลน์ (${statusData.onlineBots})` : 'ออนไลน์')
                     : isWaitingAuth
                     ? (statusData.status === 'waiting_pin' ? 'กรอกรหัส PIN' : 'รอสแกน QR')
                     : 'ออฟไลน์'}

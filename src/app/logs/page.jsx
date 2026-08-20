@@ -107,6 +107,12 @@ export default function LogsPage() {
                         <span className="text-slate-400 font-medium shrink-0">ผู้กระทำผิด:</span>
                         <span className="font-semibold text-slate-800 truncate">{l.user_name || 'Unknown User'}</span>
                       </div>
+                      {l.bot_name && (
+                        <div className="flex items-center space-x-1.5 text-emerald-700 font-medium text-[11px]">
+                          <span className="text-slate-400">บอทผู้ดูแล:</span>
+                          <span className="truncate">🤖 {l.bot_name}</span>
+                        </div>
+                      )}
                     </div>
 
                     {/* Reason / Details */}
@@ -130,6 +136,7 @@ export default function LogsPage() {
                     <th className="p-3.5 font-semibold">กลุ่ม</th>
                     <th className="p-3.5 font-semibold">ประเภทเหตุการณ์</th>
                     <th className="p-3.5 font-semibold">ผู้กระทำผิด</th>
+                    <th className="p-3.5 font-semibold">บอทที่ดำเนินการ</th>
                     <th className="p-3.5 font-semibold">สาเหตุ / รายละเอียด</th>
                   </tr>
                 </thead>
@@ -161,6 +168,9 @@ export default function LogsPage() {
                         </td>
                         <td className="p-3.5">
                           <div className="font-semibold text-slate-900">{l.user_name || 'Unknown User'}</div>
+                        </td>
+                        <td className="p-3.5">
+                          <span className="text-emerald-700 font-medium">🤖 {l.bot_name || 'Guardian Bot'}</span>
                         </td>
                         <td className="p-3.5 text-slate-600">
                           <div className="font-medium text-slate-800">{l.reason || '-'}</div>

@@ -57,7 +57,122 @@ let localStore = loadLocalStore();
 
 const db = {
     // -------------------------------------------------------------------------
-    // Bot Settings & Auth Token
+    // Multi-Bot Management (public.line_bots)
+    // -------------------------------------------------------------------------
+    async getAllBots() {
+        if (supabase) {
+            try {
+                const { data, error } = await supabase
+                    .from('line_bots')
+                    .select('*')
+                    .order('created_at', { ascending: true });
+                if (!error && data && data.length > 0) {
+                    localStore.line_bots = data;
+                    saveLocalStore(localStore);
+                    return data;
+                }
+            } catch (err) {}
+        }
+        if (localStore.line_bots && localStore.line_bots.length > 0) {
+            return localStore.line_bots;
+        }
+        // Fallback migration: check single bot_settings
+        if (localStore.bot_settings?.auth_token) {
+            const singleBot = {
+                mid: localStore.bot_settings.bot_mid || 'default_bot',
+                display_name: localStore.bot_settings.bot_name || 'น้องฝันดี',
+                picture_url: localStore.bot_settings.bot_picture_url || null,
+                auth_token: localStore.bot_settings.auth_token,
+                is_active: true
+            };
+            return [singleBot];
+        }
+        return [];
+    },
+
+    async getBotByMid(mid) {
+        if (!mid) return null;
+        if (supabase) {
+            try {
+                const { data, error } = await supabase
+                    .from('line_bots')
+                    .select('*')
+                    .eq('mid', mid)
+                    .single();
+                if (!error && data) return data;
+            } catch (err) {}
+        }
+        return (localStore.line_bots || []).find(b => b.mid === mid) || null;
+    },
+
+    async saveBot(bot) {
+        if (!bot || !bot.mid || !bot.auth_token) return null;
+        const record = {
+            mid: bot.mid,
+            display_name: bot.displayName || bot.display_name || 'LINE Bot',
+            picture_url: bot.pictureUrl || bot.picture_url || null,
+            auth_token: bot.authToken || bot.auth_token,
+            is_active: bot.isActive !== undefined ? bot.isActive : (bot.is_active !== undefined ? bot.is_active : true),
+            updated_at: new Date().toISOString()
+        };
+
+        if (!localStore.line_bots) localStore.line_bots = [];
+        const idx = localStore.line_bots.findIndex(b => b.mid === bot.mid);
+        if (idx >= 0) {
+            localStore.line_bots[idx] = { ...localStore.line_bots[idx], ...record };
+        } else {
+            localStore.line_bots.push(record);
+        }
+        saveLocalStore(localStore);
+
+        if (supabase) {
+            try {
+                const { data, error } = await supabase
+                    .from('line_bots')
+                    .upsert(record, { onConflict: 'mid' })
+                    .select()
+                    .single();
+                if (!error && data) return data;
+            } catch (err) {
+                console.warn('⚠️ Supabase saveBot error:', err.message);
+            }
+        }
+        return record;
+    },
+
+    async deleteBot(mid) {
+        if (!mid) return false;
+        if (localStore.line_bots) {
+            localStore.line_bots = localStore.line_bots.filter(b => b.mid !== mid);
+            saveLocalStore(localStore);
+        }
+
+        if (supabase) {
+            try {
+                await supabase.from('line_bots').delete().eq('mid', mid);
+            } catch (err) {}
+        }
+        return true;
+    },
+
+    async toggleBot(mid, isActive) {
+        if (!mid) return false;
+        if (localStore.line_bots) {
+            const b = localStore.line_bots.find(x => x.mid === mid);
+            if (b) b.is_active = isActive;
+            saveLocalStore(localStore);
+        }
+
+        if (supabase) {
+            try {
+                await supabase.from('line_bots').update({ is_active: isActive, updated_at: new Date().toISOString() }).eq('mid', mid);
+            } catch (err) {}
+        }
+        return true;
+    },
+
+    // -------------------------------------------------------------------------
+    // Bot Settings & Fallback
     // -------------------------------------------------------------------------
     async getBotSettings() {
         if (supabase) {
@@ -216,6 +331,11 @@ const db = {
 
     async isWhitelisted(mid, groupId = 'global') {
         if (!mid) return false;
+
+        // Mutual Bot Protection: Any registered bot is automatically 100% whitelisted
+        if (localStore.line_bots?.some(b => b.mid === mid)) return true;
+        if (localStore.bot_settings?.bot_mid === mid) return true;
+
         // Check local store
         const isLocal = localStore.whitelists.some(w => w.mid === mid && (w.group_id === 'global' || w.group_id === groupId));
         if (isLocal) return true;
@@ -333,30 +453,30 @@ const db = {
 
         if (supabase) {
             try {
-                const { data, error } = await supabase.from('link_whitelists').insert({
-                    pattern: cleanPattern,
-                    description,
-                    group_id: groupId || 'global'
-                }).select().single();
-                if (!error && data) return data;
+                const { data: existing } = await supabase.from('link_whitelists').select('id').eq('pattern', cleanPattern).limit(1);
+                if (!existing || existing.length === 0) {
+                    const { data } = await supabase.from('link_whitelists').insert({
+                        pattern: cleanPattern,
+                        description,
+                        group_id: groupId || 'global'
+                    }).select().single();
+                    if (data) return data;
+                }
             } catch (e) {}
         }
         return entry;
     },
 
     async removeLinkWhitelist(idOrPattern) {
-        if (!localStore.link_whitelists) localStore.link_whitelists = [];
-        localStore.link_whitelists = localStore.link_whitelists.filter(
-            l => l.id !== String(idOrPattern) && l.pattern !== idOrPattern
-        );
-        saveLocalStore(localStore);
+        if (localStore.link_whitelists) {
+            localStore.link_whitelists = localStore.link_whitelists.filter(l => l.id !== idOrPattern && l.pattern !== idOrPattern);
+            saveLocalStore(localStore);
+        }
 
         if (supabase) {
             try {
-                const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(String(idOrPattern));
-                if (isUuid) {
-                    await supabase.from('link_whitelists').delete().eq('id', idOrPattern);
-                } else {
+                const { error } = await supabase.from('link_whitelists').delete().eq('id', idOrPattern);
+                if (error) {
                     await supabase.from('link_whitelists').delete().eq('pattern', idOrPattern);
                 }
             } catch (e) {}
@@ -367,13 +487,15 @@ const db = {
     // -------------------------------------------------------------------------
     // Audit Logs
     // -------------------------------------------------------------------------
-    async logIncident({ groupId, groupName, userMid, userName, actionType, reason, details }) {
+    async logIncident({ groupId, groupName, userMid, userName, botMid, botName, actionType, reason, details }) {
         const logItem = {
             id: Date.now().toString(),
             group_id: groupId || 'unknown',
             group_name: groupName || 'Group',
             user_mid: userMid || 'unknown',
             user_name: userName || 'User',
+            bot_mid: botMid || null,
+            bot_name: botName || null,
             action_type: actionType,
             reason: reason || '',
             details: details || '',
@@ -393,6 +515,8 @@ const db = {
                     group_name: groupName || 'Group',
                     user_mid: userMid || 'unknown',
                     user_name: userName || 'User',
+                    bot_mid: botMid || null,
+                    bot_name: botName || null,
                     action_type: actionType,
                     reason: reason || '',
                     details: details || ''

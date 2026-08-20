@@ -2,15 +2,44 @@ import QRCode from 'qrcode';
 import { EventEmitter } from 'events';
 import db from './db.js';
 
-class BotGuardian extends EventEmitter {
-    constructor() {
+export class BotGuardian extends EventEmitter {
+    // Shared deduplication across all bot instances in the same group
+    static recentActionKeys = new Map();
+
+    static isActionRecent(key, ttlMs = 5000) {
+        const now = Date.now();
+        const lastTime = BotGuardian.recentActionKeys.get(key);
+        if (lastTime && (now - lastTime < ttlMs)) {
+            return true;
+        }
+        BotGuardian.recentActionKeys.set(key, now);
+
+        if (BotGuardian.recentActionKeys.size > 500) {
+            for (const [k, time] of BotGuardian.recentActionKeys.entries()) {
+                if (now - time > 15000) BotGuardian.recentActionKeys.delete(k);
+            }
+        }
+        return false;
+    }
+
+    constructor(botData = null) {
         super();
+        this.botMid = botData?.mid || null;
+        this.displayName = botData?.display_name || botData?.displayName || 'LINE Guardian Bot';
+        this.pictureUrl = botData?.picture_url || botData?.pictureUrl || null;
+        this.authToken = botData?.auth_token || botData?.authToken || null;
+        this.isActive = botData?.is_active !== undefined ? botData.is_active : (botData?.isActive !== undefined ? botData.isActive : true);
+
         this.client = null;
         this.status = 'offline';
         this.qrUrl = null;
         this.qrDataUrl = null;
         this.pinCode = null;
-        this.profile = null;
+        this.profile = botData?.mid ? {
+            mid: botData.mid,
+            displayName: this.displayName,
+            pictureUrl: this.pictureUrl
+        } : null;
         this.startTime = null;
         this.cachedGroups = new Map();
 
@@ -23,6 +52,13 @@ class BotGuardian extends EventEmitter {
     }
 
     enqueueKick({ chatMid, targetUserMid, groupSettings, senderName, actionType, reason, details }) {
+        // Shared Deduplication: Check if any other bot in the same group already handled this action
+        const dedupKey = `${chatMid}:${targetUserMid}:${actionType}`;
+        if (BotGuardian.isActionRecent(dedupKey, 6000)) {
+            console.log(`🛡️ [Multi-Bot Dedup] Action ${dedupKey} already processed by another bot. Skipping duplicate kick.`);
+            return;
+        }
+
         this.actionQueue.push({
             chatMid,
             targetUserMid,
@@ -53,7 +89,7 @@ class BotGuardian extends EventEmitter {
                             targetUserMids: [action.targetUserMid]
                         }
                     });
-                    console.log(`⚡ [Safe Kick] Kicked user ${action.targetUserMid} from group ${action.chatMid}`);
+                    console.log(`⚡ [Safe Kick] Bot (${this.profile?.displayName || this.displayName}) kicked ${action.targetUserMid} from group ${action.chatMid}`);
                 }
 
                 // Silent Kick check: only send chat warning if silent_kick is FALSE
@@ -70,7 +106,7 @@ class BotGuardian extends EventEmitter {
                     }
                 }
 
-                // Log incident to database
+                // Log incident to database with this bot's identity
                 const groupInfo = this.cachedGroups.get(action.chatMid);
                 const groupName = groupInfo ? groupInfo.groupName : 'LINE Group';
                 await db.logIncident({
@@ -78,6 +114,8 @@ class BotGuardian extends EventEmitter {
                     groupName,
                     userMid: action.targetUserMid,
                     userName: action.senderName || 'Offender',
+                    botMid: this.profile?.mid || this.botMid,
+                    botName: this.profile?.displayName || this.displayName,
                     actionType: action.actionType,
                     reason: action.reason,
                     details: action.details
@@ -86,29 +124,15 @@ class BotGuardian extends EventEmitter {
                 console.error(`❌ Kick action error for ${action.targetUserMid}:`, err.message);
             }
 
-            // Anti-ban Delay Throttle: Random delay between 1000ms - 1500ms if more actions pending
+            // Anti-ban Delay Throttle: Random delay between 1000ms - 1500ms
             if (this.actionQueue.length > 0) {
-                const delayMs = Math.floor(Math.random() * 501) + 1000; // 1000 to 1500 ms
+                const delayMs = Math.floor(Math.random() * 501) + 1000;
                 console.log(`⏱️ [Anti-Ban Queue] Delaying ${delayMs}ms before executing next kick...`);
                 await new Promise(r => setTimeout(r, delayMs));
             }
         }
 
         this.isProcessingQueue = false;
-    }
-
-    async init() {
-        const settings = await db.getBotSettings();
-        if (settings && settings.auth_token) {
-            console.log('🔑 Found saved Auth Token in database. Attempting automatic login...');
-            this.loginWithToken(settings.auth_token).catch(err => {
-                console.warn('⚠️ Auto-login with saved token failed:', err.message);
-                this.updateStatus('offline', { error: 'Saved token expired. Please login with QR.' });
-            });
-        } else {
-            console.log('ℹ️ No saved Auth Token found. Ready for QR Login from BackOffice.');
-            this.updateStatus('offline');
-        }
     }
 
     updateStatus(newStatus, extra = {}) {
@@ -122,15 +146,8 @@ class BotGuardian extends EventEmitter {
             this.startTime = Date.now();
         }
 
-        db.saveBotSettings({
-            status: this.status,
-            pin_code: this.pinCode,
-            bot_mid: this.profile?.mid || null,
-            bot_name: this.profile?.displayName || null,
-            bot_picture_url: this.profile?.pictureUrl || null
-        }).catch(() => {});
-
         this.emit('status_change', {
+            botMid: this.botMid || this.profile?.mid,
             status: this.status,
             profile: this.profile,
             qrDataUrl: this.qrDataUrl,
@@ -142,19 +159,22 @@ class BotGuardian extends EventEmitter {
     }
 
     getUptime() {
-        if (!this.startTime) return 0;
+        if (!this.startTime || this.status !== 'online') return 0;
         return Math.floor((Date.now() - this.startTime) / 1000);
     }
 
     getStatusInfo() {
         return {
+            mid: this.botMid || this.profile?.mid || 'unregistered',
+            displayName: this.profile?.displayName || this.displayName,
+            pictureUrl: this.profile?.pictureUrl || this.pictureUrl,
             status: this.status,
-            profile: this.profile,
+            uptime: this.getUptime(),
+            groupCount: this.cachedGroups.size,
+            isActive: this.isActive,
             qrDataUrl: this.qrDataUrl,
             qrUrl: this.qrUrl,
-            pinCode: this.pinCode,
-            uptime: this.getUptime(),
-            groupCount: this.cachedGroups.size
+            pinCode: this.pinCode
         };
     }
 
@@ -201,7 +221,8 @@ class BotGuardian extends EventEmitter {
     }
 
     async loginWithToken(token) {
-        console.log('🔄 Logging in with Auth Token...');
+        if (!token) throw new Error('No token provided.');
+        console.log(`🔄 Logging in bot (${this.displayName})...`);
         const { loginWithAuthToken } = await import('@evex/linejs');
 
         try {
@@ -212,24 +233,35 @@ class BotGuardian extends EventEmitter {
             await this.onLoginSuccess(client);
             return true;
         } catch (error) {
-            console.error('❌ Auth Token login failed:', error.message);
+            console.error(`❌ Auth Token login failed for ${this.displayName}:`, error.message);
             this.updateStatus('offline', { error: error.message });
             throw error;
         }
     }
 
     async logout() {
-        console.log('🚪 Logging out bot...');
+        console.log(`🚪 Disconnecting bot (${this.profile?.displayName || this.displayName})...`);
         if (this.client) {
             try {
                 this.client = null;
             } catch (e) {}
         }
-        await db.saveBotSettings({ auth_token: null, status: 'offline' });
+        if (this.botMid) {
+            await db.deleteBot(this.botMid);
+        }
         this.profile = null;
         this.cachedGroups.clear();
         this.updateStatus('offline');
         return true;
+    }
+
+    async stop() {
+        if (this.client) {
+            try {
+                this.client = null;
+            } catch (e) {}
+        }
+        this.updateStatus('offline');
     }
 
     async onLoginSuccess(client) {
@@ -244,21 +276,27 @@ class BotGuardian extends EventEmitter {
                 pictureUrl: myProfile.pictureUrl,
                 statusMessage: myProfile.statusMessage
             };
+            this.botMid = myProfile.mid;
+            this.displayName = myProfile.displayName;
+            this.pictureUrl = myProfile.pictureUrl;
+            this.authToken = authToken;
 
+            // Automatically whitelist this bot as owner/bot
             await db.addWhitelist(myProfile.mid, myProfile.displayName + ' (Bot)', 'owner');
         } catch (e) {
             console.warn('Could not fetch bot profile:', e.message);
         }
 
-        await db.saveBotSettings({
-            auth_token: authToken,
-            status: 'online',
-            bot_mid: this.profile?.mid,
-            bot_name: this.profile?.displayName,
-            bot_picture_url: this.profile?.pictureUrl
+        // Save bot to public.line_bots
+        await db.saveBot({
+            mid: this.botMid,
+            displayName: this.displayName,
+            pictureUrl: this.pictureUrl,
+            authToken: authToken,
+            isActive: this.isActive
         });
 
-        console.log(`🎉 Bot logged in successfully as: ${this.profile?.displayName || 'LINE Bot'} (${this.profile?.mid || 'Unknown MID'})`);
+        console.log(`🎉 Bot logged in successfully: ${this.displayName} (${this.botMid})`);
         this.updateStatus('online');
 
         await this.syncJoinedGroups();
@@ -282,10 +320,10 @@ class BotGuardian extends EventEmitter {
                     await db.getGroupSettings(chat.mid);
                 }
             }
-            console.log(`📋 Synced ${this.cachedGroups.size} LINE Groups.`);
+            console.log(`📋 [${this.displayName}] Synced ${this.cachedGroups.size} LINE Groups.`);
             return Array.from(this.cachedGroups.values());
         } catch (e) {
-            console.warn('Failed to sync joined groups:', e.message);
+            console.warn(`[${this.displayName}] Failed to sync joined groups:`, e.message);
             return [];
         }
     }
@@ -310,7 +348,7 @@ class BotGuardian extends EventEmitter {
                 pictureUrl: c.picturePath ? `https://profile.line-scdn.net${c.picturePath}` : null
             }));
         } catch (e) {
-            console.warn(`Failed to fetch members for group ${groupId}:`, e.message);
+            console.warn(`[${this.displayName}] Failed to fetch members for group ${groupId}:`, e.message);
             return [];
         }
     }
@@ -321,14 +359,14 @@ class BotGuardian extends EventEmitter {
     startEventListener() {
         if (!this.client) return;
 
-        console.log('🛡️ Starting LINE Guardian Event Listener...');
+        console.log(`🛡️ [${this.displayName}] Starting LINE Guardian Event Listener...`);
         this.client.listen({ talk: true, square: false });
 
         this.client.on('message', async (message) => {
             try {
                 await this.handleMessage(message);
             } catch (err) {
-                console.error('Error in handleMessage:', err);
+                console.error(`[${this.displayName}] Error in handleMessage:`, err);
             }
         });
 
@@ -336,7 +374,7 @@ class BotGuardian extends EventEmitter {
             try {
                 await this.handleOperation(event);
             } catch (err) {
-                console.error('Error in handleOperation:', err);
+                console.error(`[${this.displayName}] Error in handleOperation:`, err);
             }
         });
     }
@@ -348,311 +386,267 @@ class BotGuardian extends EventEmitter {
         const chatMid = message.chat?.mid || message.raw.to;
         const isGroup = chatMid && chatMid.startsWith('c');
 
-        if (senderMid === this.profile?.mid) return;
+        if (!senderMid || senderMid === this.botMid) return;
 
-        // Strict Admin-Only Commands Check
-        if (text.startsWith('#') || text.startsWith('/')) {
-            const isWhitelisted = await db.isWhitelisted(senderMid, chatMid);
-            if (!isWhitelisted) {
-                console.log(`🔒 [Command Ignored] Non-admin (${senderMid}) tried to use command: ${text}`);
-                return; // Non-admin commands are completely ignored
-            }
-            const handled = await this.handleAdminCommand(text, message, senderMid, chatMid);
-            if (handled) return;
+        // Mutual Bot & Admin Whitelist check
+        const isWhitelisted = await db.isWhitelisted(senderMid, chatMid);
+
+        // 1. Text Commands in Group
+        if (isGroup && text.startsWith('#')) {
+            await this.handleCommand(text, chatMid, senderMid, isWhitelisted, message);
+            return;
         }
 
-        if (!isGroup) return;
+        // 2. Anti-Link Enforcement
+        if (isGroup && !isWhitelisted) {
+            const groupSettings = await db.getGroupSettings(chatMid);
+            if (groupSettings.is_active && groupSettings.anti_link) {
+                const urlRegex = /(https?:\/\/[^\s]+)|(www\.[^\s]+)|([a-zA-Z0-9-]+\.(com|net|org|co|th|io|me|xyz|top|live|app|cc|vip|club|link|online|site|space|fun|info|biz|asia|tv|mobi|tech|click|shop|store|uno|bet|win|game|slot|casino)[^\s]*)/gi;
+                const matches = text.match(urlRegex);
 
-        // Anti-Link
-        const groupSettings = await db.getGroupSettings(chatMid);
-        if (groupSettings.is_active && groupSettings.anti_link) {
-            const urlRegex = /(https?:\/\/[^\s]+|line\.me\/[^\s]+|t\.me\/[^\s]+|discord\.gg\/[^\s]+|bit\.ly\/[^\s]+|[a-zA-Z0-9-]+\.(?:com|org|net|co\.th|io|me|app|tv|gg|ly|page|link|xyz)\b[^\s]*)/i;
-            if (urlRegex.test(text)) {
-                // Extract all URLs in message
-                const urlGlobalRegex = /(https?:\/\/[^\s]+|line\.me\/[^\s]+|t\.me\/[^\s]+|discord\.gg\/[^\s]+|bit\.ly\/[^\s]+|[a-zA-Z0-9-]+\.(?:com|org|net|co\.th|io|me|app|tv|gg|ly|page|link|xyz)\b[^\s]*)/gi;
-                const foundUrls = text.match(urlGlobalRegex) || [];
-
-                // Check if all found URLs are whitelisted
-                let allLinksAllowed = foundUrls.length > 0;
-                for (const url of foundUrls) {
-                    const isAllowed = await db.isLinkWhitelisted(url, chatMid);
-                    if (!isAllowed) {
-                        allLinksAllowed = false;
-                        break;
+                if (matches && matches.length > 0) {
+                    let isAllAllowed = true;
+                    for (const url of matches) {
+                        const isAllowed = await db.isLinkWhitelisted(url, chatMid);
+                        if (!isAllowed) {
+                            isAllAllowed = false;
+                            break;
+                        }
                     }
-                }
 
-                if (allLinksAllowed) {
-                    console.log(`ℹ️ [Anti-Link] Allowed whitelisted links in group ${chatMid}: ${foundUrls.join(', ')}`);
-                    return;
-                }
+                    if (!isAllAllowed) {
+                        console.log(`🚨 [Anti-Link Triggered] User ${senderMid} posted unauthorized link: "${text.substring(0, 30)}..." in group ${chatMid}`);
+                        
+                        let senderName = 'Unknown User';
+                        try {
+                            const author = await message.getAuthor();
+                            senderName = author?.displayName || 'User';
+                        } catch (e) {}
 
-                const isWhitelisted = await db.isWhitelisted(senderMid, chatMid);
-                if (!isWhitelisted) {
-                    console.log(`🚨 [Anti-Link] Queued kick for forbidden link in group ${chatMid} from ${senderMid}`);
-                    const senderName = message.author?.displayName || 'User';
-
-                    this.enqueueKick({
-                        chatMid,
-                        targetUserMid: senderMid,
-                        groupSettings,
-                        senderName,
-                        actionType: 'anti_link',
-                        reason: 'ส่งลิงก์ที่ไม่ได้รับอนุญาต (Anti-Link)',
-                        details: `ข้อความที่ส่ง: ${text.substring(0, 100)}`
-                    });
+                        this.enqueueKick({
+                            chatMid,
+                            targetUserMid: senderMid,
+                            groupSettings,
+                            senderName,
+                            actionType: 'anti_link',
+                            reason: 'ส่งลิงก์ภายนอกที่ไม่ได้รับอนุญาต',
+                            details: text.length > 80 ? text.substring(0, 80) + '...' : text
+                        });
+                    }
                 }
             }
         }
     }
 
     async handleOperation(event) {
-        if (!event) return;
-        const opType = event.type ?? event.opType;
-        const param1 = event.param1;
-        const param2 = event.param2;
-        const param3 = event.param3;
+        if (!event || !event.raw) return;
+        const op = event.raw;
+        const opType = op.type;
 
-        // Dedup revisions so no event is processed multiple times
-        if (event.revision) {
-            if (this.processedRevisions.has(event.revision)) return;
-            this.processedRevisions.add(event.revision);
-            if (this.processedRevisions.size > 1000) {
-                const first = this.processedRevisions.values().next().value;
-                this.processedRevisions.delete(first);
+        // Deduplicate revisions to prevent loops
+        if (op.revision) {
+            const revKey = `${op.revision}_${opType}`;
+            if (this.processedRevisions.has(revKey)) return;
+            this.processedRevisions.add(revKey);
+            if (this.processedRevisions.size > 2000) {
+                const firstItem = this.processedRevisions.values().next().value;
+                this.processedRevisions.delete(firstItem);
             }
         }
 
-        console.log(`📩 [Operation Received] Type: ${opType}, Param1: ${param1}, Param2: ${param2}, Param3: ${param3}`);
+        // OpType 124: NOTIFIED_INVITE_INTO_CHAT
+        if (opType === 124 || opType === 'NOTIFIED_INVITE_INTO_CHAT') {
+            await this.handleInviteEvent(op);
+            return;
+        }
 
-        const isGroup = param1 && param1.startsWith('c');
-        if (!isGroup) return;
+        // OpType 128: NOTIFIED_DELETE_OTHER_FROM_CHAT (Someone kicked someone)
+        if (opType === 128 || opType === 'NOTIFIED_DELETE_OTHER_FROM_CHAT') {
+            await this.handleKickEvent(op);
+            return;
+        }
+    }
 
-        if (param2 === this.profile?.mid) return;
+    async handleInviteEvent(op) {
+        const chatMid = op.param1;
+        const inviterMid = op.param2;
+        const inviteeMids = op.param3 ? op.param3.split('\x1e') : [];
 
-        const groupSettings = await db.getGroupSettings(param1);
-        if (!groupSettings.is_active) return;
+        if (!chatMid || !chatMid.startsWith('c') || !inviterMid) return;
+        if (inviterMid === this.botMid) return;
 
-        // Exclude Voluntary Leave Events (User leaves group on their own)
-        const isLeaveOp =
-            opType === 'NOTIFIED_DELETE_SELF_FROM_CHAT' ||
-            opType === 'NOTIFIED_LEAVE_CHAT' ||
-            opType === 127 || opType === '127' ||
-            opType === 18 || opType === '18' ||
-            String(opType).toUpperCase().includes('DELETE_SELF') ||
-            String(opType).toUpperCase().includes('LEAVE');
+        const isWhitelisted = await db.isWhitelisted(inviterMid, chatMid);
+        if (isWhitelisted) return;
 
-        if (isLeaveOp) return; // Leave is voluntary, do not kick
+        const groupSettings = await db.getGroupSettings(chatMid);
+        if (!groupSettings.is_active || !groupSettings.anti_invite) return;
 
-        const isInviteOp =
-            (opType === 'NOTIFIED_INVITE_INTO_CHAT' ||
-             opType === 'NOTIFIED_INVITE_INTO_ROOM' ||
-             opType === 124 || opType === '124' ||
-             opType === 13 || opType === '13' ||
-             String(opType).toUpperCase().includes('INVITE')) &&
-            param3;
+        console.log(`🚨 [Anti-Invite Triggered] Non-admin ${inviterMid} invited ${inviteeMids.length} users into ${chatMid}`);
 
-        const isKickOp =
-            (opType === 'NOTIFIED_DELETE_OTHER_FROM_CHAT' ||
-             opType === 'NOTIFIED_DELETE_OTHER_FROM_ROOM' ||
-             opType === 128 || opType === '128' ||
-             opType === 19 || opType === '19' ||
-             String(opType).toUpperCase().includes('DELETE_OTHER')) &&
-            param3 && param3.startsWith('u') &&
-            param2 !== param3;
+        let inviterName = 'Unknown User';
+        try {
+            const contacts = await this.client.base.talk.getContacts({ mids: [inviterMid] });
+            inviterName = contacts[0]?.displayName || 'User';
+        } catch (e) {}
 
-        // Anti-Invite
-        if (isInviteOp && groupSettings.anti_invite) {
-            const isWhitelisted = await db.isWhitelisted(param2, param1);
-            if (!isWhitelisted) {
-                console.log(`🚨 [Anti-Invite] Unauthorized invite in group ${param1} by ${param2}`);
-                const invitedMids = param3 ? param3.split(/[\x1e,]/).filter(Boolean) : [];
+        // 1. Kick inviter
+        this.enqueueKick({
+            chatMid,
+            targetUserMid: inviterMid,
+            groupSettings,
+            senderName: inviterName,
+            actionType: 'anti_invite',
+            reason: `เชิญสมาชิกอื่นเข้ากลุ่มโดยไม่ได้รับอนุญาต (${inviteeMids.length} คน)`,
+            details: `Inviter MID: ${inviterMid}`
+        });
 
-                if (invitedMids.length > 0) {
-                    try {
-                        await this.client.base.talk.cancelChatInvitation({
-                            request: {
-                                chatMid: param1,
-                                targetUserMids: invitedMids
-                            }
-                        });
-                        console.log(`🚫 Canceled invitations for ${invitedMids.length} users.`);
-                    } catch (e) {
-                        console.warn('Failed to cancel invitation:', e.message);
+        // 2. Cancel invitations for invitees
+        if (this.client && inviteeMids.length > 0) {
+            try {
+                await this.client.base.talk.cancelChatInvitation({
+                    request: {
+                        chatMid,
+                        targetUserMids: inviteeMids
                     }
-                }
-
-                this.enqueueKick({
-                    chatMid: param1,
-                    targetUserMid: param2,
-                    groupSettings,
-                    senderName: 'Unknown Inviter',
-                    actionType: 'anti_invite',
-                    reason: 'เชิญสมาชิกโดยไม่ได้รับอนุญาต (Anti-Invite)',
-                    details: `เชิญสมาชิกจำนวน ${invitedMids.length} คน`
                 });
-            }
-        }
-
-        // Anti-Kick
-        if (isKickOp && groupSettings.anti_kick) {
-            const isWhitelisted = await db.isWhitelisted(param2, param1);
-            if (!isWhitelisted) {
-                console.log(`🚨 [Anti-Kick] Queued kick for unauthorized kicker in group ${param1} by ${param2}`);
-
-                this.enqueueKick({
-                    chatMid: param1,
-                    targetUserMid: param2,
-                    groupSettings,
-                    senderName: 'Offender',
-                    actionType: 'anti_kick',
-                    reason: 'เตะสมาชิกอื่นโดยไม่ได้รับอนุญาต (Anti-Kick / Kick-back)',
-                    details: `เตะผู้ใช้ ${param3}`
-                });
+                console.log(`🛑 [Invite Cancelled] Cancelled ${inviteeMids.length} pending invitations in ${chatMid}`);
+            } catch (e) {
+                console.warn('Failed to cancel chat invitations:', e.message);
             }
         }
     }
 
-    async handleAdminCommand(text, message, senderMid, chatMid) {
-        const isWhitelisted = await db.isWhitelisted(senderMid, chatMid);
-        if (!isWhitelisted) return false;
+    async handleKickEvent(op) {
+        const chatMid = op.param1;
+        const kickerMid = op.param2;
+        const victimMids = op.param3 ? op.param3.split('\x1e') : [];
 
-        const cmd = text.trim().toLowerCase();
+        if (!chatMid || !chatMid.startsWith('c') || !kickerMid) return;
+        if (kickerMid === this.botMid) return;
 
-        if (cmd === '#mid' || cmd === '#ไอดี' || cmd === '/mid') {
-            const myMid = senderMid;
-            const myName = message.author?.displayName || 'User';
-            await message.chat.sendMessage(`👤 ข้อมูลของคุณ:\nชื่อ: ${myName}\n🔑 MID: ${myMid}`);
-            return true;
+        // Whitelist check
+        const isWhitelisted = await db.isWhitelisted(kickerMid, chatMid);
+        if (isWhitelisted) return;
+
+        const groupSettings = await db.getGroupSettings(chatMid);
+        if (!groupSettings.is_active || !groupSettings.anti_kick) return;
+
+        console.log(`🚨 [Anti-Kick Triggered] Non-admin ${kickerMid} kicked users from group ${chatMid}`);
+
+        let kickerName = 'Unknown User';
+        try {
+            const contacts = await this.client.base.talk.getContacts({ mids: [kickerMid] });
+            kickerName = contacts[0]?.displayName || 'User';
+        } catch (e) {}
+
+        // Kick the rogue kicker immediately
+        this.enqueueKick({
+            chatMid,
+            targetUserMid: kickerMid,
+            groupSettings,
+            senderName: kickerName,
+            actionType: 'anti_kick',
+            reason: `เตะสมาชิกคนอื่นออกจากกลุ่ม (${victimMids.length} คน)`,
+            details: `Kicked users: ${victimMids.join(', ')}`
+        });
+    }
+
+    async handleCommand(text, chatMid, senderMid, isWhitelisted, message) {
+        const parts = text.trim().split(/\s+/);
+        const cmd = parts[0].toLowerCase();
+
+        if (cmd === '#สถานะ' || cmd === '#status') {
+            const groupSettings = await db.getGroupSettings(chatMid);
+            const statusMsg = `🛡️ [Guardian Bot - ข้อมูลสถานะกลุ่ม]\n` +
+                `📌 บอทประจำกลุ่ม: ${this.displayName}\n` +
+                `━━━━━━━━━━━━━━━\n` +
+                `🔗 Anti-Link: ${groupSettings.anti_link ? '✅ เปิดทำงาน' : '❌ ปิด'}\n` +
+                `👥 Anti-Invite: ${groupSettings.anti_invite ? '✅ เปิดทำงาน' : '❌ ปิด'}\n` +
+                `⚡ Anti-Kick: ${groupSettings.anti_kick ? '✅ เปิดทำงาน' : '❌ ปิด'}\n` +
+                `🤫 Silent Kick: ${groupSettings.silent_kick ? '✅ เปิดทำงาน' : '❌ ปิด'}\n` +
+                `━━━━━━━━━━━━━━━\n` +
+                `💻 จัดการผ่านเว็บ: https://guardianbot-lotto.up.railway.app`;
+            try {
+                const chat = await this.client.getChat(chatMid);
+                await chat.sendMessage(statusMsg);
+            } catch (e) {}
+            return;
         }
 
-        if (cmd.startsWith('#เพิ่มแอดมิน') || cmd.startsWith('#addadmin')) {
-            // Check if there are mentions in the message
-            const raw = message.raw;
-            const contentMetadata = raw?.contentMetadata || {};
-            const mentionList = contentMetadata?.MENTION;
-            let targetMids = [];
-
-            if (mentionList) {
-                try {
-                    const parsed = JSON.parse(mentionList);
-                    targetMids = parsed.MENTIONEES?.map(m => m.M) || [];
-                } catch (e) {}
-            }
-
-            // Or extract raw MID from command text
-            const parts = text.trim().split(/\s+/);
-            if (parts.length > 1 && parts[1].startsWith('u')) {
-                targetMids.push(parts[1]);
-            }
-
-            if (targetMids.length === 0) {
-                await message.chat.sendMessage('⚠️ กรุณาแท็ก (@mention) สมาชิกที่ต้องการตั้งเป็นแอดมิน หรือระบุ MID เช่น:\n#เพิ่มแอดมิน @ชื่อเพื่อน');
-                return true;
-            }
-
-            for (const mid of targetMids) {
-                await db.addWhitelist(mid, 'Admin (จากคำสั่งแชต)', 'admin', chatMid);
-            }
-            await message.chat.sendMessage(`✅ เพิ่มผู้ดูแลจำนวน ${targetMids.length} คนเข้าสู่ Whitelist เรียบร้อยแล้ว`);
-            return true;
+        if (cmd === '#ช่วยเหลือ' || cmd === '#help') {
+            const helpMsg = `📖 [คำสั่ง Guardian Bot]\n` +
+                `• #สถานะ - ดูสถานะความปลอดภัยกลุ่ม\n` +
+                `• #ช่วยเหลือ - ดูรายการคำสั่ง\n` +
+                `• #เพิ่มแอดมิน @แท็กชื่อ - แต่งตั้งแอดมิน (Admin Only)\n` +
+                `• #ลบแอดมิน @แท็กชื่อ - ลบแอดมิน (Admin Only)\n` +
+                `• #เปิดระบบ / #ปิดระบบ - เปิด/ปิดระบบบอทกลุ่มนี้`;
+            try {
+                const chat = await this.client.getChat(chatMid);
+                await chat.sendMessage(helpMsg);
+            } catch (e) {}
+            return;
         }
 
-        if (cmd.startsWith('#เพิ่มลิงก์') || cmd.startsWith('#addlink')) {
-            const parts = text.trim().split(/\s+/);
-            if (parts.length < 2) {
-                await message.chat.sendMessage('⚠️ กรุณาระบุโดเมนหรือลิงก์ เช่น:\n#เพิ่มลิงก์ youtube.com\n#เพิ่มลิงก์ tiktok.com');
-                return true;
-            }
-            const domain = parts[1];
-            await db.addLinkWhitelist(domain, 'เพิ่มผ่านแชต', chatMid);
-            await message.chat.sendMessage(`✅ เพิ่มโดเมน/ลิงก์ "${domain}" เข้าสู่ Link Whitelist เรียบร้อยแล้ว (สมาชิกทุกคนสามารถส่งลิงก์นี้ได้)`);
-            return true;
-        }
-
-        if (cmd.startsWith('#ลบลิงก์') || cmd.startsWith('#removelink')) {
-            const parts = text.trim().split(/\s+/);
-            if (parts.length < 2) {
-                await message.chat.sendMessage('⚠️ กรุณาระบุโดเมนที่ต้องการลบ เช่น:\n#ลบลิงก์ youtube.com');
-                return true;
-            }
-            const domain = parts[1];
-            await db.removeLinkWhitelist(domain);
-            await message.chat.sendMessage(`🗑️ ลบโดเมน/ลิงก์ "${domain}" ออกจาก Link Whitelist เรียบร้อยแล้ว`);
-            return true;
-        }
-
-        if (cmd === '#รายการลิงก์' || cmd === '#links') {
-            const links = await db.getLinkWhitelists();
-            if (links.length === 0) {
-                await message.chat.sendMessage('📋 ยังไม่มีลิงก์ที่อนุญาตใน Link Whitelist');
-                return true;
-            }
-            const listText = links.map((l, i) => `${i + 1}. 🌐 ${l.pattern} (${l.description || 'ทั่วไป'})`).join('\n');
-            await message.chat.sendMessage(`📋 [รายการลิงก์ที่อนุญาตให้ส่งได้]:\n${listText}`);
-            return true;
-        }
-
-        if (cmd === '#status' || cmd === '#สถานะ' || cmd === '/status') {
-            const s = await db.getGroupSettings(chatMid);
-            const statusMsg = `🛡️ [สถานะ Guardian Bot]
-กลุ่ม: ${s.group_name || chatMid}
-ระบบโดยรวม: ${s.is_active ? '🟢 เปิดใช้งาน' : '🔴 ปิดใช้งาน'}
-🔗 กันส่งลิงก์ (Anti-Link): ${s.anti_link ? '✅ เปิด' : '❌ ปิด'}
-👥 กันเชิญมั่ว (Anti-Invite): ${s.anti_invite ? '✅ เปิด' : '❌ ปิด'}
-⚡ กันเตะมั่ว (Anti-Kick): ${s.anti_kick ? '✅ เปิด' : '❌ ปิด'}
-⏱️ Uptime: ${this.getUptime()} วินาที`;
-            await message.chat.sendMessage(statusMsg);
-            return true;
-        }
-
-        if (cmd === '#เปิดกันลิงก์') {
-            await db.saveGroupSettings(chatMid, { anti_link: true });
-            await message.chat.sendMessage('✅ เปิดใช้งานระบบ Anti-Link (เตะคนส่งลิงก์) เรียบร้อยแล้ว');
-            return true;
-        }
-        if (cmd === '#ปิดกันลิงก์') {
-            await db.saveGroupSettings(chatMid, { anti_link: false });
-            await message.chat.sendMessage('❌ ปิดใช้งานระบบ Anti-Link เรียบร้อยแล้ว');
-            return true;
-        }
-
-        if (cmd === '#เปิดกันเชิญ') {
-            await db.saveGroupSettings(chatMid, { anti_invite: true });
-            await message.chat.sendMessage('✅ เปิดใช้งานระบบ Anti-Invite (เตะคนเชิญมั่ว) เรียบร้อยแล้ว');
-            return true;
-        }
-        if (cmd === '#ปิดกันเชิญ') {
-            await db.saveGroupSettings(chatMid, { anti_invite: false });
-            await message.chat.sendMessage('❌ ปิดใช้งานระบบ Anti-Invite เรียบร้อยแล้ว');
-            return true;
-        }
-
-        if (cmd === '#เปิดกันเตะ') {
-            await db.saveGroupSettings(chatMid, { anti_kick: true });
-            await message.chat.sendMessage('✅ เปิดใช้งานระบบ Anti-Kick (เตะคนเตะมั่ว) เรียบร้อยแล้ว');
-            return true;
-        }
-        if (cmd === '#ปิดกันเตะ') {
-            await db.saveGroupSettings(chatMid, { anti_kick: false });
-            await message.chat.sendMessage('❌ ปิดใช้งานระบบ Anti-Kick เรียบร้อยแล้ว');
-            return true;
-        }
+        if (!isWhitelisted) return;
 
         if (cmd === '#เปิดระบบ') {
             await db.saveGroupSettings(chatMid, { is_active: true });
-            await message.chat.sendMessage('🟢 เปิดใช้งานระบบความปลอดภัยกลุ่มนี้เรียบร้อยแล้ว');
-            return true;
-        }
-        if (cmd === '#ปิดระบบ') {
-            await db.saveGroupSettings(chatMid, { is_active: false });
-            await message.chat.sendMessage('🔴 ปิดการทำงานของระบบความปลอดภัยกลุ่มนี้ชั่วคราว');
-            return true;
+            const chat = await this.client.getChat(chatMid);
+            await chat.sendMessage('✅ เปิดระบบความปลอดภัยกลุ่มเรียบร้อยแล้ว');
+            return;
         }
 
-        return false;
+        if (cmd === '#ปิดระบบ') {
+            await db.saveGroupSettings(chatMid, { is_active: false });
+            const chat = await this.client.getChat(chatMid);
+            await chat.sendMessage('⚠️ ปิดระบบความปลอดภัยกลุ่มชั่วคราวเรียบร้อยแล้ว');
+            return;
+        }
+
+        if (cmd === '#เพิ่มแอดมิน' || cmd === '#addadmin') {
+            const mentionees = message.raw?.contentMetadata?.MENTION 
+                ? JSON.parse(message.raw.contentMetadata.MENTION)?.MENTIONEES || []
+                : [];
+
+            if (mentionees.length === 0) {
+                const chat = await this.client.getChat(chatMid);
+                await chat.sendMessage('⚠️ กรุณาพิมพ์คำสั่งพร้อม @แท็กชื่อ สมาชิกที่ต้องการเพิ่มเป็นแอดมิน เช่น #เพิ่มแอดมิน @ชื่อเพื่อน');
+                return;
+            }
+
+            for (const m of mentionees) {
+                if (m.M) {
+                    await db.addWhitelist(m.M, 'Admin (Tag)', 'admin', chatMid);
+                }
+            }
+            const chat = await this.client.getChat(chatMid);
+            await chat.sendMessage(`✅ แต่งตั้งผู้ดูแล ${mentionees.length} คนเข้าสู่ Whitelist เรียบร้อยแล้ว`);
+            return;
+        }
+
+        if (cmd === '#ลบแอดมิน' || cmd === '#deladmin') {
+            const mentionees = message.raw?.contentMetadata?.MENTION 
+                ? JSON.parse(message.raw.contentMetadata.MENTION)?.MENTIONEES || []
+                : [];
+
+            if (mentionees.length === 0) {
+                const chat = await this.client.getChat(chatMid);
+                await chat.sendMessage('⚠️ กรุณาพิมพ์คำสั่งพร้อม @แท็กชื่อ สมาชิกที่ต้องการลบสิทธิ์ เช่น #ลบแอดมิน @ชื่อเพื่อน');
+                return;
+            }
+
+            for (const m of mentionees) {
+                if (m.M) {
+                    await db.removeWhitelist(m.M);
+                }
+            }
+            const chat = await this.client.getChat(chatMid);
+            await chat.sendMessage(`✅ ลบสิทธิ์ผู้ดูแล ${mentionees.length} คนออกจาก Whitelist เรียบร้อยแล้ว`);
+            return;
+        }
     }
 }
 
-const botGuardian = new BotGuardian();
-export default botGuardian;
+// Single instance export for backward compatibility
+const botInstance = new BotGuardian();
+export default botInstance;

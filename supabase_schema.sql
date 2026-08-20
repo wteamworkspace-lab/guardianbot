@@ -1,9 +1,21 @@
 -- ==============================================================================
--- Guardian Bot - Supabase Database Schema & RLS Policies (Full Anon Access)
+-- Guardian Bot - Supabase Database Schema & RLS Policies (Multi-Bot Support)
 -- Run this SQL in your Supabase Dashboard -> SQL Editor
 -- ==============================================================================
 
--- 1. Table for Bot Settings & Auth Token
+-- 0. Table for Multi-Bot Accounts & Auth Tokens
+CREATE TABLE IF NOT EXISTS public.line_bots (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    mid TEXT UNIQUE NOT NULL,
+    display_name TEXT DEFAULT 'LINE Bot',
+    picture_url TEXT,
+    auth_token TEXT NOT NULL,
+    is_active BOOLEAN DEFAULT TRUE,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+
+-- 1. Table for Bot Settings & Fallback
 CREATE TABLE IF NOT EXISTS public.bot_settings (
     id TEXT PRIMARY KEY DEFAULT 'config',
     auth_token TEXT,
@@ -20,6 +32,7 @@ CREATE TABLE IF NOT EXISTS public.group_settings (
     group_id TEXT PRIMARY KEY,
     group_name TEXT NOT NULL DEFAULT 'LINE Group',
     group_picture_url TEXT,
+    bot_mids TEXT[] DEFAULT '{}',
     anti_link BOOLEAN DEFAULT TRUE,
     anti_invite BOOLEAN DEFAULT TRUE,
     anti_kick BOOLEAN DEFAULT TRUE,
@@ -56,6 +69,8 @@ CREATE TABLE IF NOT EXISTS public.audit_logs (
     group_name TEXT,
     user_mid TEXT,
     user_name TEXT,
+    bot_mid TEXT,
+    bot_name TEXT,
     action_type TEXT NOT NULL, -- 'anti_link', 'anti_invite', 'anti_kick', 'command'
     reason TEXT,
     details TEXT,
@@ -81,6 +96,17 @@ CREATE TABLE IF NOT EXISTS public.admin_users (
 -- ==============================================================================
 -- Enable RLS and Configure Full Access Policies for `anon` role
 -- ==============================================================================
+-- 0. RLS Policy for line_bots table
+ALTER TABLE public.line_bots ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS "Anon Full Access line_bots" ON public.line_bots;
+CREATE POLICY "Anon Full Access line_bots"
+ON public.line_bots
+FOR ALL
+TO anon, authenticated, service_role
+USING (true)
+WITH CHECK (true);
+
+-- 1. RLS Policy for bot_settings table
 ALTER TABLE public.bot_settings ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.group_settings ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.whitelists ENABLE ROW LEVEL SECURITY;
@@ -145,6 +171,7 @@ USING (true)
 WITH CHECK (true);
 
 -- Grant table privileges
+GRANT ALL ON TABLE public.line_bots TO anon, authenticated, service_role;
 GRANT ALL ON TABLE public.bot_settings TO anon, authenticated, service_role;
 GRANT ALL ON TABLE public.group_settings TO anon, authenticated, service_role;
 GRANT ALL ON TABLE public.whitelists TO anon, authenticated, service_role;

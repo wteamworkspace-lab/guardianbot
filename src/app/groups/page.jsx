@@ -142,6 +142,16 @@ export default function GroupsPage() {
                     </div>
                     <div className="min-w-0">
                       <h4 className="font-bold text-slate-900 text-sm sm:text-base truncate">{g.groupName || 'กลุ่ม LINE'}</h4>
+                      {g.assignedBots && g.assignedBots.length > 0 && (
+                        <div className="flex items-center gap-1.5 flex-wrap mt-1">
+                          {g.assignedBots.map(bot => (
+                            <span key={bot.mid} className="inline-flex items-center space-x-1 px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200 text-[10px] font-bold">
+                              <span>🤖</span>
+                              <span className="truncate max-w-[120px]">{bot.displayName}</span>
+                            </span>
+                          ))}
+                        </div>
+                      )}
                     </div>
                   </div>
                   <div className="flex items-center space-x-3">

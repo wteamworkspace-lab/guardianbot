@@ -39,3 +39,14 @@ body {
 }
 input:checked + .slider { background-color: #06C755; }
 input:checked + .slider:before { transform: translateX(20px); }
+
+/* Hide scrollbar for Chrome, Safari and Opera */
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+/* Hide scrollbar for IE, Edge and Firefox */
+.no-scrollbar {
+  -ms-overflow-style: none;  /* IE and Edge */
+  scrollbar-width: none;  /* Firefox */
+}
+

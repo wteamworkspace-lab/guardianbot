@@ -31,27 +31,27 @@ export default function LogsPage() {
   return (
     <div className="space-y-6">
       
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 sm:gap-4">
         <div>
-          <h2 className="text-xl font-bold text-slate-900 flex items-center space-x-2">
-            <ClipboardList className="w-6 h-6 text-line" />
+          <h2 className="text-lg sm:text-xl font-bold text-slate-900 flex items-center space-x-2">
+            <ClipboardList className="w-5 h-5 sm:w-6 sm:h-6 text-line" />
             <span>ประวัติการตรวจจับและเตะผู้กระทำผิด (Audit Logs)</span>
           </h2>
-          <p className="text-sm text-slate-500 mt-0.5">
+          <p className="text-xs sm:text-sm text-slate-500 mt-0.5">
             บันทึกเหตุการณ์ทุกครั้งที่มีการเตะคนส่งลิงก์ เชิญมั่ว หรือเตะคนอื่น
           </p>
         </div>
         <button
           onClick={fetchLogs}
           disabled={isLoading}
-          className="px-4 py-2.5 rounded-xl bg-white hover:bg-slate-50 text-slate-700 text-xs font-semibold flex items-center space-x-2 transition border border-slate-200 shadow-sm self-start sm:self-auto active:scale-95"
+          className="w-full sm:w-auto px-4 py-2 sm:py-2.5 rounded-xl bg-white hover:bg-slate-50 text-slate-700 text-xs font-semibold flex items-center justify-center space-x-2 transition border border-slate-200 shadow-sm active:scale-95 shrink-0"
         >
-          <RefreshCw className={`w-4 h-4 text-slate-600 ${isLoading ? 'animate-spin' : ''}`} />
+          <RefreshCw className={`w-3.5 h-3.5 sm:w-4 sm:h-4 text-slate-600 ${isLoading ? 'animate-spin' : ''}`} />
           <span>รีเฟรชประวัติ</span>
         </button>
       </div>
 
-      <div className="light-card rounded-2xl p-6 space-y-4 shadow-sm">
+      <div className="light-card rounded-2xl p-4 sm:p-6 space-y-4 shadow-sm">
         <div className="overflow-x-auto">
           <table className="w-full text-left text-xs text-slate-600">
             <thead className="bg-slate-50 text-slate-500 uppercase text-[10px] tracking-wider border-b border-slate-200">

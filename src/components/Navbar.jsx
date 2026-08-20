@@ -167,64 +167,64 @@ export default function Navbar() {
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           
           {/* Top Bar */}
-          <div className="h-16 flex items-center justify-between">
-            <Link href="/" className="flex items-center space-x-3 group">
-              <div className="w-10 h-10 rounded-xl bg-line flex items-center justify-center shadow-md shadow-line/20 group-hover:scale-105 transition-transform">
-                <ShieldCheck className="w-6 h-6 text-white" />
+          <div className="h-14 sm:h-16 flex items-center justify-between gap-2">
+            <Link href="/" className="flex items-center space-x-2.5 sm:space-x-3 group min-w-0">
+              <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-xl bg-line flex items-center justify-center shadow-md shadow-line/20 group-hover:scale-105 transition-transform shrink-0">
+                <ShieldCheck className="w-5 h-5 sm:w-6 sm:h-6 text-white" />
               </div>
-              <div>
-                <h1 className="text-lg font-bold text-slate-900 leading-tight">Guardian Bot</h1>
-                <p className="text-xs text-slate-500">LINE Group Protection & BackOffice</p>
+              <div className="min-w-0">
+                <h1 className="text-base sm:text-lg font-bold text-slate-900 leading-tight truncate">Guardian Bot</h1>
+                <p className="text-[11px] sm:text-xs text-slate-500 truncate hidden xs:block">LINE Group Protection</p>
               </div>
             </Link>
 
             {/* Right Controls: Bot Status & Admin Account */}
-            <div className="flex items-center space-x-3">
+            <div className="flex items-center space-x-2 shrink-0">
               {/* Live Status Badge */}
-              <div className={`hidden sm:flex items-center space-x-2 px-3.5 py-1.5 rounded-full text-xs font-semibold shadow-sm border ${
+              <div className={`flex items-center space-x-1.5 sm:space-x-2 px-2.5 sm:px-3.5 py-1 sm:py-1.5 rounded-full text-[11px] sm:text-xs font-semibold shadow-sm border ${
                 isOnline
                   ? 'bg-emerald-50 border-emerald-200 text-emerald-800'
                   : isWaitingAuth
                   ? 'bg-amber-50 border-amber-200 text-amber-800'
                   : 'bg-red-50 border-red-200 text-red-800'
               }`}>
-                <span className={`w-2.5 h-2.5 rounded-full ${
+                <span className={`w-2 h-2 sm:w-2.5 sm:h-2.5 rounded-full shrink-0 ${
                   isOnline ? 'bg-emerald-500' : isWaitingAuth ? 'bg-amber-500 animate-ping' : 'bg-red-500'
                 }`}></span>
-                <span>
+                <span className="truncate max-w-[90px] xs:max-w-none">
                   {isOnline
-                    ? 'ออนไลน์ (Online)'
+                    ? 'ออนไลน์'
                     : isWaitingAuth
-                    ? (statusData.status === 'waiting_pin' ? 'กรุณากรอกรหัส PIN ใน LINE' : 'รอการสแกน QR Code')
-                    : 'ออฟไลน์ (Offline)'}
+                    ? (statusData.status === 'waiting_pin' ? 'กรอกรหัส PIN' : 'รอสแกน QR')
+                    : 'ออฟไลน์'}
                 </span>
               </div>
 
               {/* Admin Actions */}
-              <div className="flex items-center space-x-2 pl-2 border-l border-slate-200">
+              <div className="flex items-center space-x-1 sm:space-x-2 pl-1.5 sm:pl-2 border-l border-slate-200">
                 <button
                   onClick={() => setShowPasswordModal(true)}
-                  title="เปลี่ยนรหัสผ่านแดชบอร์ด"
-                  className="p-2 rounded-xl text-slate-600 hover:text-slate-900 hover:bg-slate-100 transition flex items-center gap-1.5 text-xs font-medium border border-slate-200"
+                  title="เปลี่ยนรหัสผ่านแอดมิน"
+                  className="p-2 sm:px-2.5 sm:py-1.5 rounded-xl text-slate-600 hover:text-slate-900 hover:bg-slate-100 transition flex items-center gap-1.5 text-xs font-medium border border-slate-200 active:scale-95"
                 >
                   <KeyRound className="w-3.5 h-3.5 text-amber-500" />
-                  <span className="hidden md:inline">เปลี่ยนรหัสผ่าน</span>
+                  <span className="hidden lg:inline">เปลี่ยนรหัส</span>
                 </button>
 
                 <button
                   onClick={handleLogout}
                   title="ออกจากระบบจัดการ"
-                  className="p-2 rounded-xl text-rose-600 hover:text-rose-700 hover:bg-rose-50 transition flex items-center gap-1.5 text-xs font-medium border border-rose-200"
+                  className="p-2 sm:px-2.5 sm:py-1.5 rounded-xl text-rose-600 hover:text-rose-700 hover:bg-rose-50 transition flex items-center gap-1.5 text-xs font-medium border border-rose-200 active:scale-95"
                 >
                   <LogOut className="w-3.5 h-3.5" />
-                  <span className="hidden md:inline">ออกจากระบบ</span>
+                  <span className="hidden lg:inline">ออกระบบ</span>
                 </button>
               </div>
             </div>
           </div>
 
-          {/* Path Navigation Links */}
-          <nav className="flex space-x-2 pb-3 overflow-x-auto pt-1">
+          {/* Path Navigation Links (Horizontal Smooth Touch Scroll) */}
+          <nav className="flex space-x-1.5 sm:space-x-2 pb-2.5 sm:pb-3 overflow-x-auto pt-1 no-scrollbar -mx-4 px-4 sm:mx-0 sm:px-0">
             {navItems.map((item) => {
               const Icon = item.icon;
               const isActive = pathname === item.href;
@@ -232,13 +232,13 @@ export default function Navbar() {
                 <Link
                   key={item.href}
                   href={item.href}
-                  className={`px-4 py-2 rounded-xl text-sm flex items-center space-x-2 transition font-medium whitespace-nowrap ${
+                  className={`px-3 sm:px-4 py-1.5 sm:py-2 rounded-xl text-xs sm:text-sm flex items-center space-x-1.5 sm:space-x-2 transition font-medium whitespace-nowrap shrink-0 active:scale-95 ${
                     isActive
                       ? 'bg-line text-white font-semibold shadow-md shadow-line/20'
                       : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100'
                   }`}
                 >
-                  <Icon className="w-4 h-4" />
+                  <Icon className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
                   <span>{item.label}</span>
                 </Link>
               );
